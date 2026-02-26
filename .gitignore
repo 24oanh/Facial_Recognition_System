@@ -9,17 +9,21 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
-# # Data (không commit data gốc, chỉ giữ cấu trúc)
+# # Data (khong commit data goc, chi giu cau truc)
 # data/raw/*
 # !data/raw/.gitkeep
 # data/processed/*
 # !data/processed/.gitkeep
 
-# Kết quả lớn
+# Ket qua lon
 results/figures/*
 !results/figures/.gitkeep
 results/metrics/*.pkl
 !results/metrics/.gitkeep
+
+# Webapp saved models
+webapp/saved_models/*
+!webapp/saved_models/.gitkeep
 
 # OS
 .DS_Store

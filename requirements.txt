@@ -10,3 +10,4 @@ ipykernel>=6.25.0
 ipywidgets>=8.1.0
 Pillow>=10.0.0
 tqdm>=4.65.0
+streamlit>=1.28.0
