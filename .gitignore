@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# # Data (không commit data gốc, chỉ giữ cấu trúc)
+# data/raw/*
+# !data/raw/.gitkeep
+# data/processed/*
+# !data/processed/.gitkeep
+
+# Kết quả lớn
+results/figures/*
+!results/figures/.gitkeep
+results/metrics/*.pkl
+!results/metrics/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
