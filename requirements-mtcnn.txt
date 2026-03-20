@@ -1,0 +1,2 @@
+--no-deps
+facenet-pytorch>=2.6.0

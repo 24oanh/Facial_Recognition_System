@@ -1,0 +1,414 @@
+{% extends "base.html" %} {% block content %}
+<div class="card data-card">
+  <div class="page-head">
+    <h2>Du lieu da xu ly</h2>
+    <p class="subtitle">
+      Tong hop cac bundle trong `data/processed`, giup doi chieu nhanh giua raw
+      dataset, preset dang dung va artifact da sinh ra.
+    </p>
+  </div>
+
+  <div class="stats-grid">
+    <article class="stat-card">
+      <span class="stat-label">Processed bundles</span>
+      <strong class="stat-value">{{ snapshot.processed_bundle_count }}</strong>
+    </article>
+    <article class="stat-card">
+      <span class="stat-label">Featured samples</span>
+      <strong class="stat-value">{{ snapshot.processed_sample_count }}</strong>
+    </article>
+    <article class="stat-card">
+      <span class="stat-label">Datasets</span>
+      <strong class="stat-value">{{ snapshot.dataset_count }}</strong>
+    </article>
+    <article class="stat-card">
+      <span class="stat-label">Metrics files</span>
+      <strong class="stat-value">{{ snapshot.metric_count }}</strong>
+    </article>
+  </div>
+
+  <section class="section-block">
+    <div class="section-header">
+      <div>
+        <h3>Thong ke dataset duoc uu tien</h3>
+        <p>
+          Bieu do ben duoi dung bundle uu tien cua tung dataset de minh hoa quy
+          mo du lieu dau vao cho hai pipeline.
+        </p>
+      </div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="result-box chart-card">
+        <div class="chart-title">So luong samples</div>
+        <canvas id="samplesChart" height="220"></canvas>
+      </div>
+      <div class="result-box chart-card">
+        <div class="chart-title">So luong classes</div>
+        <canvas id="classesChart" height="220"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-block">
+    <div class="section-header">
+      <div>
+        <h3>Dataset overview</h3>
+        <p>
+          Muc nay hien thi duong dan raw, bundle duoc uu tien va mo hinh dang
+          dan dau tren moi dataset.
+        </p>
+      </div>
+    </div>
+
+    <div class="overview-grid">
+      {% for item in dataset_overviews %}
+      <article class="result-box overview-card">
+        <div class="overview-top">
+          <div>
+            <div class="overview-name">{{ item.dataset_label }}</div>
+            <p>{{ item.description }}</p>
+          </div>
+          {% if item.winner %}
+          <span class="overview-badge">
+            {{ item.winner.model_label }} · {{ item.winner.accuracy|percent }}
+          </span>
+          {% endif %}
+        </div>
+
+        <div class="overview-body">
+          <div>
+            <span>Raw duoc phat hien</span>
+            <strong>{{ item.raw_subjects }} subjects / {{ item.raw_samples }} samples</strong>
+          </div>
+          <div>
+            <span>Featured bundle</span>
+            <strong>{{ item.samples_total }} samples / {{ item.classes_total }} classes</strong>
+          </div>
+          <div>
+            <span>Raw path</span>
+            <strong>{{ item.raw_path }}</strong>
+          </div>
+          {% if item.featured_bundle %}
+          <div>
+            <span>Preset va preprocessing</span>
+            <strong>
+              {{ item.featured_bundle.preset_label }} · {{
+              item.featured_bundle.representation_label }} · {{
+              item.featured_bundle.face_detection_label }}
+            </strong>
+          </div>
+          {% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="section-block">
+    <div class="section-header">
+      <div>
+        <h3>Danh sach toan bo bundle</h3>
+        <p>
+          Cac card ben duoi lay tu moi `summary.json` trong `data/processed` va
+          kem link download artifact chinh.
+        </p>
+      </div>
+    </div>
+
+    <div class="bundle-grid">
+      {% for bundle in processed_bundles %}
+      <article class="result-box bundle-card">
+        <div class="bundle-head">
+          <div>
+            <div class="bundle-name">{{ bundle.dataset_label }}</div>
+            <div class="bundle-path">{{ bundle.relative_path }}</div>
+          </div>
+          <span class="bundle-badge">{{ bundle.preset_label }}</span>
+        </div>
+
+        <div class="bundle-meta">
+          <div>
+            <span>Samples / classes</span>
+            <strong>{{ bundle.samples_total }} / {{ bundle.classes_total }}</strong>
+          </div>
+          <div>
+            <span>Train / test</span>
+            <strong>{{ bundle.train_samples }} / {{ bundle.test_samples }}</strong>
+          </div>
+          <div>
+            <span>Representation</span>
+            <strong>{{ bundle.representation_label }}</strong>
+          </div>
+          <div>
+            <span>Face detection</span>
+            <strong>{{ bundle.face_detection_label }}</strong>
+          </div>
+          <div>
+            <span>Image size</span>
+            <strong>{{ bundle.image_size_label }}</strong>
+          </div>
+          <div>
+            <span>Feature shape</span>
+            <strong>{{ bundle.feature_shape | join(" x ") }}</strong>
+          </div>
+          <div>
+            <span>Dropped / truncated</span>
+            <strong>{{ bundle.dropped_subject_count }} / {{ bundle.truncated_subject_count }}</strong>
+          </div>
+          <div>
+            <span>Inputs size</span>
+            <strong>{{ bundle.bundle_size_label }}</strong>
+          </div>
+          <div>
+            <span>Created</span>
+            <strong>{{ bundle.created_label }}</strong>
+          </div>
+        </div>
+
+        <div class="artifact-row">
+          {% for artifact in bundle.artifacts %}
+          <a
+            class="artifact-link"
+            href="{{ url_for('download_artifact', category='processed', filename=artifact.download_name) }}"
+          >
+            {{ artifact.label }} · {{ artifact.size_label }}
+          </a>
+          {% endfor %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<style>
+  .data-card {
+    max-width: 1240px;
+  }
+
+  .page-head {
+    margin-bottom: 24px;
+  }
+
+  .stats-grid,
+  .chart-grid,
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .chart-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overview-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .stat-card,
+  .chart-card,
+  .overview-card,
+  .bundle-card {
+    margin-top: 0;
+    padding: 20px;
+  }
+
+  .stat-card {
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: white;
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+
+  .stat-label {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    display: block;
+    font-size: 30px;
+    color: var(--text);
+    font-weight: 800;
+  }
+
+  .section-block {
+    margin-top: 30px;
+  }
+
+  .section-header {
+    margin-bottom: 18px;
+  }
+
+  .section-header h3 {
+    font-size: 20px;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .section-header p {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .chart-title,
+  .overview-name,
+  .bundle-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .overview-top,
+  .bundle-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+
+  .overview-top p,
+  .bundle-path {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 4px;
+    word-break: break-word;
+  }
+
+  .overview-badge,
+  .bundle-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.12);
+    color: var(--primary);
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .overview-body,
+  .bundle-meta {
+    display: grid;
+    gap: 12px;
+  }
+
+  .overview-body div,
+  .bundle-meta div {
+    padding: 14px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.03);
+    border: 1px solid rgba(15, 23, 42, 0.05);
+  }
+
+  .overview-body span,
+  .bundle-meta span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  .overview-body strong,
+  .bundle-meta strong {
+    color: var(--text);
+    font-size: 13px;
+    word-break: break-word;
+  }
+
+  .bundle-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .artifact-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+  }
+
+  .artifact-link {
+    text-decoration: none;
+    color: var(--primary);
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.12);
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+
+  .artifact-link:hover {
+    background: rgba(37, 99, 235, 0.14);
+  }
+
+  @media (max-width: 1100px) {
+    .stats-grid,
+    .overview-grid,
+    .bundle-grid,
+    .chart-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+  const datasetChart = {{ dataset_chart | tojson }};
+
+  new Chart(document.getElementById("samplesChart"), {
+    type: "bar",
+    data: {
+      labels: datasetChart.labels,
+      datasets: [
+        {
+          label: "Samples",
+          data: datasetChart.samples,
+          backgroundColor: "rgba(37, 99, 235, 0.82)",
+          borderRadius: 10,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, grid: { color: "#e2e8f0" } },
+        x: { grid: { display: false } },
+      },
+    },
+  });
+
+  new Chart(document.getElementById("classesChart"), {
+    type: "bar",
+    data: {
+      labels: datasetChart.labels,
+      datasets: [
+        {
+          label: "Classes",
+          data: datasetChart.classes,
+          backgroundColor: "rgba(16, 185, 129, 0.82)",
+          borderRadius: 10,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, grid: { color: "#e2e8f0" } },
+        x: { grid: { display: false } },
+      },
+    },
+  });
+</script>
+{% endblock %}

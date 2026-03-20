@@ -6,8 +6,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
+from ..configs.config import IMAGE_SHAPE, IMAGE_SIZE
+
+
+def _normalize_image_shape(image_shape: tuple[int, int]) -> tuple[int, int]:
+    image_shape = tuple(image_shape)
+    if image_shape == IMAGE_SIZE:
+        return IMAGE_SHAPE
+    return image_shape
+
 
 def _resolve_component_matrix(components: np.ndarray, image_shape: tuple[int, int]) -> np.ndarray:
+    image_shape = _normalize_image_shape(image_shape)
     components = np.asarray(components)
     expected_size = image_shape[0] * image_shape[1]
 
@@ -23,9 +33,10 @@ def _resolve_component_matrix(components: np.ndarray, image_shape: tuple[int, in
 
 def plot_eigenfaces(
     components: np.ndarray,
-    image_shape: tuple[int, int] = (112, 92),
+    image_shape: tuple[int, int] = IMAGE_SHAPE,
     n_faces: int = 10,
 ):
+    image_shape = _normalize_image_shape(image_shape)
     matrix = _resolve_component_matrix(components, image_shape)
     n_faces = min(n_faces, matrix.shape[0])
     n_cols = min(5, n_faces)
@@ -64,14 +75,15 @@ def plot_explained_variance(explained_variance_ratio: np.ndarray):
 
 def plot_confusion_matrix(confusion_matrix_data, labels: list[str] | None = None):
     matrix = np.asarray(confusion_matrix_data)
+    ticklabels = labels if labels is not None else "auto"
     fig, ax = plt.subplots(figsize=(8, 6))
     sns.heatmap(
         matrix,
         annot=False,
         fmt="d",
         cmap="Blues",
-        xticklabels=labels,
-        yticklabels=labels,
+        xticklabels=ticklabels,
+        yticklabels=ticklabels,
         ax=ax,
     )
     ax.set_xlabel("Predicted Label")
@@ -94,9 +106,10 @@ def plot_model_comparison(df, metric: str = "Accuracy"):
 def plot_sample_images(
     images: np.ndarray,
     labels: np.ndarray | None = None,
-    image_shape: tuple[int, int] = (112, 92),
+    image_shape: tuple[int, int] = IMAGE_SHAPE,
     n_samples: int = 10,
 ):
+    image_shape = _normalize_image_shape(image_shape)
     images = np.asarray(images)
     n_samples = min(n_samples, images.shape[0])
     n_cols = min(5, n_samples)

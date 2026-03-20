@@ -1,10 +1,19 @@
+from pathlib import Path
+
 # Cấu hình dự án
 # Siêu tham số cho Dataset, PCA, KNN, SVM
 
-DATA_DIR = "data/raw"
-PROCESSED_DIR = "data/processed"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-IMAGE_SIZE = (92, 112)  # ORL/AT&T dataset: 92x112 pixels
+DATA_DIR = str(PROJECT_ROOT / "data" / "raw")
+PROCESSED_DIR = str(PROJECT_ROOT / "data" / "processed")
+
+ORL_DATA_DIR = str(Path(DATA_DIR) / "ORL")
+EXTENDED_YALE_B_DIR = str(Path(DATA_DIR) / "CroppedYale")
+LFW_DATA_DIR = str(Path(DATA_DIR) / "lfw")
+
+IMAGE_SIZE = (92, 112)  # PIL/OpenCV convention: (width, height)
+IMAGE_SHAPE = (IMAGE_SIZE[1], IMAGE_SIZE[0])  # NumPy convention: (height, width)
 
 # Phân chia tập huấn luyện / kiểm tra
 TEST_SIZE = 0.2

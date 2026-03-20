@@ -7,8 +7,18 @@ import joblib
 import numpy as np
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
+from ..configs.config import SVM_DEGREE, SVM_MAX_ITER, SVM_TOL
 from ..features.pca import PCAScratch
 from ..models.svm import SVMClassifier
+
+
+def _ensure_2d_samples(X: np.ndarray) -> np.ndarray:
+    X = np.asarray(X, dtype=np.float64)
+    if X.ndim < 2:
+        raise ValueError("Expected input with shape (n_samples, ...).")
+    if X.ndim == 2:
+        return X
+    return X.reshape(X.shape[0], -1)
 
 
 class PCASVMPipeline:
@@ -18,26 +28,40 @@ class PCASVMPipeline:
         C: float = 1.0,
         kernel: str = "rbf",
         gamma: str | float = "scale",
-        degree: int = 3,
+        degree: int = SVM_DEGREE,
+        decision_function_shape: str = "ovo",
+        tol: float = SVM_TOL,
+        max_iter: int = SVM_MAX_ITER,
     ):
         self.n_components = n_components
         self.C = C
         self.kernel = kernel
         self.gamma = gamma
         self.degree = degree
+        self.decision_function_shape = decision_function_shape
+        self.tol = tol
+        self.max_iter = max_iter
         self.pca = PCAScratch(n_components=n_components)
-        self.svm = SVMClassifier(C=C, kernel=kernel, gamma=gamma, degree=degree)
+        self.svm = SVMClassifier(
+            C=C,
+            kernel=kernel,
+            gamma=gamma,
+            degree=degree,
+            decision_function_shape=decision_function_shape,
+            tol=tol,
+            max_iter=max_iter,
+        )
         self.train_time_: float | None = None
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "PCASVMPipeline":
         start = perf_counter()
-        embeddings = self.pca.fit_transform(X)
+        embeddings = self.pca.fit_transform(_ensure_2d_samples(X))
         self.svm.fit(embeddings, y)
         self.train_time_ = perf_counter() - start
         return self
 
     def transform(self, X: np.ndarray) -> np.ndarray:
-        return self.pca.transform(X)
+        return self.pca.transform(_ensure_2d_samples(X))
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         embeddings = self.transform(X)

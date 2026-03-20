@@ -1,7 +1,7 @@
 ## Mục đích các thư mục trong dự án PCA + KNN vs PCA + SVM
 
 - **data/**
-  - **raw/**: Dữ liệu gốc ORL/AT&T.
+  - **raw/**: Dữ liệu gốc ORL/AT&T, Extended Yale B, LFW.
   - **processed/**: Dữ liệu đã tiền xử lý hoặc cache trung gian nếu cần.
 - **notebooks/**
   - Notebook dùng để khám phá dữ liệu, thử công thức và demo nhanh.
@@ -13,8 +13,11 @@
 - **src/**
   - **datasets/**: Định nghĩa container dataset như `FaceDataset`.
   - **preprocessing/**:
-    - `loader.py`: đọc ảnh ORL/AT&T, chia train/test.
+    - `downloader.py`: tải archive raw và extract dataset về `data/raw/`.
+    - `loader.py`: đọc ảnh ORL/AT&T, Extended Yale B, LFW và chia train/test.
     - `preprocessor.py`: resize, grayscale, normalize, flatten.
+  - **process/**:
+    - `dataset_processing.py`: lọc subject theo ngưỡng ảnh, preprocess hàng loạt, tạo input và lưu artifact processed.
   - **features/**:
     - `pca.py`: triển khai PCA thuần NumPy.
     - `feature_extractor.py`: wrapper dùng PCA như bộ trích xuất đặc trưng.

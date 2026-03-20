@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ page_title }} | Math for ML</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <header>
+      <div class="logo">
+        <img
+          src="{{ url_for('static', filename='css/images/logo.png') }}"
+          alt="Project logo"
+        />
+        <div class="logo-copy">
+          <b>Math for ML Dashboard</b><br />
+          <span>PCA + KNN vs PCA + SVM cho bai toan nhan dang khuon mat</span>
+        </div>
+      </div>
+
+      <nav>
+        <a href="/" class="{{ 'active' if active == 'home' }}">Tong quan</a>
+        <a href="/realtime" class="{{ 'active' if active == 'realtime' }}"
+          >Pipeline</a
+        >
+        <a href="/batch" class="{{ 'active' if active == 'batch' }}"
+          >Du lieu</a
+        >
+        <a
+          href="/database-builder"
+          class="{{ 'active' if active == 'database_builder' }}"
+          >Artifacts</a
+        >
+      </nav>
+    </header>
+
+    <main>{% block content %}{% endblock %}</main>
+
+    <footer class="site-footer">
+      Tong hop artifact tu `data/processed`, `results/metrics` va
+      `webapp/saved_models`.
+    </footer>
+  </body>
+</html>

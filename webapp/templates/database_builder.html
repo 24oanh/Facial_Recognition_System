@@ -1,0 +1,378 @@
+{% extends "base.html" %} {% block content %}
+<div class="card artifact-card">
+  <div class="page-head">
+    <h2>Artifacts va models</h2>
+    <p class="subtitle">
+      Trang nay thay cho database builder cu. Toan bo noi dung duoc doi sang
+      file artifact thuc te cua repo: saved models, metrics CSV va cac lenh tai
+      tao.
+    </p>
+  </div>
+
+  <div class="stats-strip">
+    <div class="stat-pill">
+      <span>Saved models</span>
+      <strong>{{ snapshot.saved_model_count }}</strong>
+    </div>
+    <div class="stat-pill">
+      <span>Metrics files</span>
+      <strong>{{ snapshot.metric_count }}</strong>
+    </div>
+    <div class="stat-pill">
+      <span>Best accuracy</span>
+      <strong>{{ snapshot.best_accuracy_label }}</strong>
+    </div>
+  </div>
+
+  <section class="section-block">
+    <div class="section-header">
+      <div>
+        <h3>Saved models trong `webapp/saved_models`</h3>
+        <p>
+          Cac file `.joblib` duoc gan nhan theo model, dataset va preset de xem
+          nhanh artifact nao dang phuc vu notebook/demo.
+        </p>
+      </div>
+    </div>
+
+    <div class="model-grid">
+      {% for model in saved_models %}
+      <article class="result-box saved-card">
+        <div class="saved-head">
+          <div>
+            <div class="saved-name">{{ model.model_label }}</div>
+            <div class="saved-meta">
+              {{ model.dataset_label }} · {{ model.preset_label }}
+            </div>
+          </div>
+          <span class="saved-badge {{ model.accent }}">{{ model.accuracy|percent if model.accuracy is not none else 'No metric' }}</span>
+        </div>
+
+        <div class="saved-body">
+          <div>
+            <span>File</span>
+            <strong>{{ model.file_name }}</strong>
+          </div>
+          <div>
+            <span>Relative path</span>
+            <strong>{{ model.relative_path }}</strong>
+          </div>
+          <div>
+            <span>Size</span>
+            <strong>{{ model.size_label }}</strong>
+          </div>
+          <div>
+            <span>Modified</span>
+            <strong>{{ model.modified_label }}</strong>
+          </div>
+          <div>
+            <span>Train time</span>
+            <strong>{{ "%.3f"|format(model.train_time) ~ ' s' if model.train_time is not none else 'N/A' }}</strong>
+          </div>
+        </div>
+
+        <a
+          class="download-link"
+          href="{{ url_for('download_artifact', category='saved-models', filename=model.download_name) }}"
+        >
+          Download model
+        </a>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="section-block">
+    <div class="section-header">
+      <div>
+        <h3>Bang tong hop metrics</h3>
+        <p>
+          Muc nay doc truc tiep tu cac file CSV trong `results/metrics`, giu
+          dung ket qua notebook thay vi du lieu placeholder.
+        </p>
+      </div>
+    </div>
+
+    <div class="result-box table-shell">
+      <table class="metrics-table">
+        <thead>
+          <tr>
+            <th>Experiment</th>
+            <th>Model</th>
+            <th>Accuracy</th>
+            <th>Precision</th>
+            <th>Recall</th>
+            <th>F1</th>
+            <th>Train time</th>
+            <th>CSV</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for experiment in experiments %}
+          {% for record in experiment.records %}
+          <tr>
+            <td>
+              <div class="table-main">{{ experiment.title }}</div>
+              <div class="table-sub">{{ experiment.relative_path }}</div>
+            </td>
+            <td>{{ record.model_label }}</td>
+            <td>{{ record.accuracy|percent }}</td>
+            <td>{{ record.precision|percent }}</td>
+            <td>{{ record.recall|percent }}</td>
+            <td>{{ record.f1_score|percent }}</td>
+            <td>{{ "%.3f"|format(record.train_time) }} s</td>
+            <td>
+              <a
+                class="table-link"
+                href="{{ url_for('download_artifact', category='metrics', filename=experiment.download_name) }}"
+              >
+                Download
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section-block">
+    <div class="section-header">
+      <div>
+        <h3>Lenh tai tao artifact</h3>
+        <p>
+          Day la nhung command nhanh de chay lai preprocessing va train baseline
+          trong cung repo.
+        </p>
+      </div>
+    </div>
+
+    <div class="command-grid">
+      {% for item in repro_commands %}
+      <article class="result-box command-card">
+        <div class="command-title">{{ item.title }}</div>
+        <pre class="command-shell"><code>{{ item.command }}</code></pre>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<style>
+  .artifact-card {
+    max-width: 1260px;
+  }
+
+  .page-head {
+    margin-bottom: 24px;
+  }
+
+  .stats-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .stat-pill {
+    padding: 18px 20px;
+    border-radius: 16px;
+    background: white;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+
+  .stat-pill span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .stat-pill strong {
+    font-size: 30px;
+    color: var(--text);
+  }
+
+  .section-block {
+    margin-top: 30px;
+  }
+
+  .section-header {
+    margin-bottom: 18px;
+  }
+
+  .section-header h3 {
+    font-size: 20px;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .section-header p {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .model-grid,
+  .command-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .saved-card,
+  .command-card {
+    margin-top: 0;
+    padding: 20px;
+  }
+
+  .saved-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    align-items: flex-start;
+  }
+
+  .saved-name,
+  .command-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .saved-meta {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  .saved-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .saved-badge.primary {
+    background: rgba(37, 99, 235, 0.12);
+    color: var(--primary);
+  }
+
+  .saved-badge.success {
+    background: rgba(16, 185, 129, 0.14);
+    color: var(--success);
+  }
+
+  .saved-body {
+    display: grid;
+    gap: 12px;
+  }
+
+  .saved-body div {
+    padding: 14px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.03);
+    border: 1px solid rgba(15, 23, 42, 0.05);
+  }
+
+  .saved-body span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  .saved-body strong {
+    color: var(--text);
+    font-size: 13px;
+    word-break: break-word;
+  }
+
+  .download-link,
+  .table-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--primary);
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.12);
+    border-radius: 999px;
+    padding: 8px 14px;
+    margin-top: 16px;
+    transition: all 0.2s ease;
+  }
+
+  .download-link:hover,
+  .table-link:hover {
+    background: rgba(37, 99, 235, 0.14);
+  }
+
+  .table-shell {
+    margin-top: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .metrics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .metrics-table thead {
+    background: #f8fafc;
+  }
+
+  .metrics-table th,
+  .metrics-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .table-main {
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .table-sub {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .command-shell {
+    margin-top: 14px;
+    padding: 16px;
+    border-radius: 12px;
+    background: #0f172a;
+    color: #e2e8f0;
+    overflow-x: auto;
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  @media (max-width: 1100px) {
+    .stats-strip,
+    .model-grid,
+    .command-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .table-shell {
+      overflow-x: auto;
+    }
+  }
+</style>
+{% endblock %}

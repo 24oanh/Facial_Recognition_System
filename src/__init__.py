@@ -2,7 +2,35 @@ from .datasets import FaceDataset, load_face_dataset
 from .features import PCAFeatureExtractor, PCAScratch
 from .models import KNNScratch, PCAKNNPipeline, PCASVMPipeline, SVMClassifier
 from .pipelines import evaluate_pipeline, train_pca_knn, train_pca_svm
-from .preprocessing import load_and_split, load_orl_dataset, preprocess_batch, preprocess_image
+from .process import (
+    PROCESSING_PRESETS,
+    analyze_subject_count_thresholds,
+    create_model_inputs,
+    get_dataset_processing_preset,
+    load_processed_dataset_bundle,
+    process_all_face_datasets,
+    process_extended_yale_b_dataset,
+    process_face_dataset,
+    process_face_dataset_with_preset,
+    process_lfw_dataset,
+    process_lfw_many_people_few_images_dataset,
+    process_orl_dataset,
+    save_processed_dataset_bundle,
+)
+from .preprocessing import (
+    download_extended_yale_b_raw,
+    download_lfw_raw,
+    detect_and_crop_face,
+    detect_largest_face_bbox,
+    ensure_dataset_downloaded,
+    load_and_split,
+    load_dataset,
+    load_extended_yale_b_dataset,
+    load_lfw_dataset,
+    load_orl_dataset,
+    preprocess_batch,
+    preprocess_image,
+)
 
 __all__ = [
     "FaceDataset",
@@ -16,8 +44,29 @@ __all__ = [
     "train_pca_knn",
     "train_pca_svm",
     "evaluate_pipeline",
+    "PROCESSING_PRESETS",
+    "analyze_subject_count_thresholds",
+    "create_model_inputs",
+    "download_extended_yale_b_raw",
+    "download_lfw_raw",
+    "detect_and_crop_face",
+    "detect_largest_face_bbox",
+    "ensure_dataset_downloaded",
+    "get_dataset_processing_preset",
+    "load_processed_dataset_bundle",
     "load_and_split",
+    "load_dataset",
+    "load_extended_yale_b_dataset",
+    "load_lfw_dataset",
     "load_orl_dataset",
+    "process_all_face_datasets",
+    "process_extended_yale_b_dataset",
+    "process_face_dataset",
+    "process_face_dataset_with_preset",
+    "process_lfw_dataset",
+    "process_lfw_many_people_few_images_dataset",
+    "process_orl_dataset",
     "preprocess_batch",
     "preprocess_image",
+    "save_processed_dataset_bundle",
 ]

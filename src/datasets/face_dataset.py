@@ -5,8 +5,8 @@ from pathlib import Path
 
 import numpy as np
 
-from ..configs.config import DATA_DIR, IMAGE_SIZE
-from ..preprocessing.loader import load_orl_dataset
+from ..configs.config import DATA_DIR, EXTENDED_YALE_B_DIR, IMAGE_SIZE, LFW_DATA_DIR, ORL_DATA_DIR
+from ..preprocessing.loader import load_dataset
 
 
 @dataclass(slots=True)
@@ -32,20 +32,35 @@ class FaceDataset:
 
 
 def load_face_dataset(
-    data_dir: str | Path = DATA_DIR,
+    data_dir: str | Path | None = None,
     image_size: tuple[int, int] | None = IMAGE_SIZE,
     normalize: bool = True,
     flatten: bool = True,
+    dataset_name: str = "orl",
+    **dataset_kwargs,
 ) -> FaceDataset:
-    X, y = load_orl_dataset(
+    normalized_name = dataset_name.strip().lower().replace("-", "_").replace(" ", "_")
+    default_source_dirs = {
+        "orl": ORL_DATA_DIR,
+        "att_faces": ORL_DATA_DIR,
+        "att": ORL_DATA_DIR,
+        "extended_yale_b": EXTENDED_YALE_B_DIR,
+        "extended_yale": EXTENDED_YALE_B_DIR,
+        "cropped_yale": EXTENDED_YALE_B_DIR,
+        "lfw": LFW_DATA_DIR,
+    }
+    source_dir = str(data_dir or default_source_dirs.get(normalized_name, DATA_DIR))
+    X, y = load_dataset(
+        dataset_name=dataset_name,
         data_dir=data_dir,
         image_size=image_size,
         normalize=normalize,
         flatten=flatten,
+        **dataset_kwargs,
     )
     return FaceDataset(
         data=X,
         target=y,
         image_size=image_size or IMAGE_SIZE,
-        source_dir=str(data_dir),
+        source_dir=source_dir,
     )

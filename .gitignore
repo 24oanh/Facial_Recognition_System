@@ -9,11 +9,12 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
-# # Data (khong commit data goc, chi giu cau truc)
-# data/raw/*
-# !data/raw/.gitkeep
-# data/processed/*
-# !data/processed/.gitkeep
+# Data (khong commit data goc, chi giu cau truc)
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/README
+data/processed/*
+!data/processed/.gitkeep
 
 # Ket qua lon
 results/figures/*

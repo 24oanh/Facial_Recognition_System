@@ -11,6 +11,15 @@ from ..features.pca import PCAScratch
 from ..models.knn import KNNScratch
 
 
+def _ensure_2d_samples(X: np.ndarray) -> np.ndarray:
+    X = np.asarray(X, dtype=np.float64)
+    if X.ndim < 2:
+        raise ValueError("Expected input with shape (n_samples, ...).")
+    if X.ndim == 2:
+        return X
+    return X.reshape(X.shape[0], -1)
+
+
 class PCAKNNPipeline:
     def __init__(self, n_components: int, k: int = 5, metric: str = "euclidean"):
         self.n_components = n_components
@@ -22,13 +31,13 @@ class PCAKNNPipeline:
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "PCAKNNPipeline":
         start = perf_counter()
-        embeddings = self.pca.fit_transform(X)
+        embeddings = self.pca.fit_transform(_ensure_2d_samples(X))
         self.knn.fit(embeddings, y)
         self.train_time_ = perf_counter() - start
         return self
 
     def transform(self, X: np.ndarray) -> np.ndarray:
-        return self.pca.transform(X)
+        return self.pca.transform(_ensure_2d_samples(X))
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         embeddings = self.transform(X)

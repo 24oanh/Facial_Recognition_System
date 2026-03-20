@@ -1,0 +1,380 @@
+{% extends "base.html" %} {% block content %}
+<div class="card pipeline-card">
+  <div class="page-head">
+    <h2>Pipeline va quy trinh thuc nghiem</h2>
+    <p class="subtitle">
+      Trang nay thay cho demo realtime cu, tap trung mo ta workflow, tham so va
+      cac tieu chi danh gia dang duoc su dung trong du an hien tai.
+    </p>
+  </div>
+
+  <div class="workflow-layout">
+    <section class="result-box flow-panel">
+      <div class="panel-title">Luong xu ly chinh</div>
+      <div class="flow-list">
+        {% for item in pipeline_steps %}
+        <article class="flow-item">
+          <div class="flow-step">{{ item.step }}</div>
+          <div class="flow-content">
+            <h3>{{ item.title }}</h3>
+            <p>{{ item.description }}</p>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="result-box parameter-panel">
+      <div class="panel-title">Thong so hien tai tu `src/configs/config.py`</div>
+      <div class="parameter-grid">
+        {% for item in model_parameters %}
+        <article class="parameter-card">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <p>{{ item.detail }}</p>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <section class="section-block">
+    <div class="section-header">
+      <div>
+        <h3>Preset dataset dang hien dien trong repo</h3>
+        <p>
+          Moi card ben duoi lay tu bundle uu tien cua tung dataset, bao gom preset,
+          cach bieu dien du lieu va thong tin preprocessing.
+        </p>
+      </div>
+    </div>
+
+    <div class="preset-grid">
+      {% for item in dataset_overviews %}
+      <article class="result-box preset-card">
+        <div class="preset-head">
+          <div>
+            <div class="preset-name">{{ item.dataset_label }}</div>
+            <p>{{ item.description }}</p>
+          </div>
+          {% if item.featured_bundle %}
+          <span class="preset-badge">{{ item.featured_bundle.preset_label }}</span>
+          {% endif %}
+        </div>
+
+        {% if item.featured_bundle %}
+        <div class="preset-meta">
+          <div>
+            <span>Representation</span>
+            <strong>{{ item.featured_bundle.representation_label }}</strong>
+          </div>
+          <div>
+            <span>Face detection</span>
+            <strong>{{ item.featured_bundle.face_detection_label }}</strong>
+          </div>
+          <div>
+            <span>Image size</span>
+            <strong>{{ item.featured_bundle.image_size_label }}</strong>
+          </div>
+          <div>
+            <span>Bundle path</span>
+            <strong>{{ item.featured_bundle.relative_path }}</strong>
+          </div>
+        </div>
+        {% else %}
+        <p class="empty-note">Chua tim thay processed bundle cho dataset nay.</p>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="section-block two-column">
+    <article class="result-box info-panel">
+      <div class="panel-title">Tieu chi so sanh</div>
+      <ul class="accent-list">
+        {% for item in comparison_axes %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </article>
+
+    <article class="result-box info-panel">
+      <div class="panel-title">Mapping source code</div>
+      <div class="structure-grid">
+        {% for item in structure_cards %}
+        <div class="structure-card">
+          <strong>{{ item.path }}</strong>
+          <p>{{ item.detail }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+
+  <section class="section-block">
+    <div class="section-header">
+      <div>
+        <h3>Hai pipeline duoc theo doi</h3>
+        <p>
+          Khong doi theme, chi doi noi dung tu deep-learning demo sang cac thanh
+          phan dung voi bai toan PCA scratch trong repo nay.
+        </p>
+      </div>
+    </div>
+
+    <div class="model-grid">
+      {% for model in model_cards %}
+      <article class="model-card {{ model.key }}">
+        <div class="model-row">
+          <h4>{{ model.title }}</h4>
+          <span class="model-chip {{ model.accent }}">{{ model.key }}</span>
+        </div>
+        <p class="model-summary">{{ model.summary }}</p>
+        <ul class="accent-list compact">
+          {% for detail in model.details %}
+          <li>{{ detail }}</li>
+          {% endfor %}
+        </ul>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<style>
+  .pipeline-card {
+    max-width: 1220px;
+  }
+
+  .page-head {
+    margin-bottom: 26px;
+  }
+
+  .workflow-layout {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 20px;
+  }
+
+  .flow-panel,
+  .parameter-panel,
+  .info-panel,
+  .preset-card {
+    margin-top: 0;
+    padding: 22px;
+  }
+
+  .panel-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 18px;
+  }
+
+  .flow-list {
+    display: grid;
+    gap: 18px;
+  }
+
+  .flow-item {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+
+  .flow-step {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.15) 0%,
+      rgba(37, 99, 235, 0.08) 100%
+    );
+    color: var(--primary);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+  }
+
+  .flow-content {
+    padding: 16px;
+    border-radius: 14px;
+    background: rgba(37, 99, 235, 0.04);
+    border: 1px solid rgba(37, 99, 235, 0.08);
+  }
+
+  .flow-content h3 {
+    font-size: 15px;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .flow-content p {
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+
+  .parameter-grid,
+  .preset-grid,
+  .model-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .parameter-card,
+  .structure-card {
+    padding: 16px;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.03);
+    border: 1px solid rgba(15, 23, 42, 0.06);
+  }
+
+  .parameter-card span,
+  .preset-meta span {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .parameter-card strong,
+  .preset-meta strong,
+  .structure-card strong {
+    display: block;
+    color: var(--text);
+    font-size: 15px;
+    margin-bottom: 6px;
+  }
+
+  .parameter-card p,
+  .structure-card p {
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .section-block {
+    margin-top: 30px;
+  }
+
+  .section-header h3 {
+    font-size: 20px;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .section-header p {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .preset-head,
+  .model-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+
+  .preset-name,
+  .model-row h4 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .preset-head p,
+  .model-summary {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  .preset-badge,
+  .model-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.12);
+    color: var(--primary);
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .preset-meta {
+    display: grid;
+    gap: 12px;
+  }
+
+  .preset-meta div {
+    padding: 14px;
+    border-radius: 12px;
+    background: rgba(37, 99, 235, 0.03);
+    border: 1px solid rgba(37, 99, 235, 0.08);
+  }
+
+  .two-column {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .accent-list {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+  }
+
+  .accent-list li {
+    position: relative;
+    padding-left: 18px;
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+
+  .accent-list li::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--primary);
+    position: absolute;
+    left: 0;
+    top: 8px;
+  }
+
+  .compact li {
+    font-size: 13px;
+  }
+
+  .structure-grid {
+    display: grid;
+    gap: 12px;
+  }
+
+  .empty-note {
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  @media (max-width: 1080px) {
+    .workflow-layout,
+    .two-column,
+    .parameter-grid,
+    .preset-grid,
+    .model-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
