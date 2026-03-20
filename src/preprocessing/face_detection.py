@@ -161,8 +161,8 @@ def detect_largest_face_bbox(
 def _expand_bbox(
     bbox: FaceBBox,
     image_shape: tuple[int, int],
-    padding_ratio: float = 0.25,
-    square: bool = True,
+    padding_ratio: float = 0.0,
+    square: bool = False,
 ) -> FaceBBox:
     image_height, image_width = image_shape
     x, y, width, height = bbox
@@ -203,8 +203,8 @@ def _crop_bbox(
 def crop_face_by_bbox(
     image: Image.Image | np.ndarray,
     bbox: FaceBBox,
-    padding_ratio: float = 0.25,
-    square: bool = True,
+    padding_ratio: float = 0.0,
+    square: bool = False,
 ) -> tuple[np.ndarray, FaceBBox]:
     image_array = _as_array(image)
     image_shape = image_array.shape[:2]
@@ -223,8 +223,8 @@ def crop_face_by_bbox(
 def detect_and_crop_face(
     image: Image.Image | np.ndarray,
     detector: str = "haar",
-    padding_ratio: float = 0.25,
-    square: bool = True,
+    padding_ratio: float = 0.0,
+    square: bool = False,
     fallback: str = "original",
     scale_factor: float = 1.1,
     min_neighbors: int = 5,

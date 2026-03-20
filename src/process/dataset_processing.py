@@ -15,7 +15,7 @@ from sklearn.model_selection import train_test_split
 
 from ..configs import config as config_module
 from ..preprocessing.face_detection import detect_largest_face_bbox
-from ..preprocessing.preprocessor import preprocess_image
+from ..preprocessing.preprocessor import assess_processed_image_quality, preprocess_image
 
 
 PROJECT_ROOT = Path(
@@ -88,6 +88,18 @@ class FaceSample:
     face_area_ratio: float | None = None
 
 
+@dataclass(slots=True)
+class ProcessedFaceSample:
+    path: Path
+    subject_name: str
+    sample_name: str
+    array: np.ndarray
+    face_bbox: tuple[int, int, int, int] | None = None
+    face_area_ratio: float | None = None
+    processing_metadata: dict[str, Any] | None = None
+    quality_metadata: dict[str, Any] | None = None
+
+
 PROCESSING_PRESETS: dict[str, dict[str, dict[str, Any]]] = {
     "orl": {
         "balanced": {
@@ -95,25 +107,34 @@ PROCESSING_PRESETS: dict[str, dict[str, dict[str, Any]]] = {
             "max_images_per_subject": 10,
             "balance_subjects": True,
             "target_images_per_subject": 10,
-            "face_detection": "mtcnn",
-            "face_crop_fallback": "skip",
-            "min_face_area_ratio": 0.08,
+            "face_detection": None,
+            "processing_profile": "standard",
+            "quality_gate": None,
+        },
+        "enhanced_balanced": {
+            "min_images_per_subject": 10,
+            "max_images_per_subject": 10,
+            "balance_subjects": True,
+            "target_images_per_subject": 10,
+            "face_detection": None,
+            "processing_profile": "orl_enhanced",
+            "quality_gate": None,
         },
         "many_people_many_images": {
             "min_images_per_subject": 8,
             "max_images_per_subject": 10,
-            "face_detection": "mtcnn",
-            "face_crop_fallback": "skip",
-            "min_face_area_ratio": 0.08,
+            "face_detection": None,
+            "processing_profile": "standard",
+            "quality_gate": None,
         },
         "many_images_few_people": {
             "min_images_per_subject": 10,
             "max_images_per_subject": 10,
             "max_subjects": 20,
             "subject_selection": "original",
-            "face_detection": "mtcnn",
-            "face_crop_fallback": "skip",
-            "min_face_area_ratio": 0.08,
+            "face_detection": None,
+            "processing_profile": "standard",
+            "quality_gate": None,
         },
     },
     "extended_yale_b": {
@@ -123,17 +144,39 @@ PROCESSING_PRESETS: dict[str, dict[str, dict[str, Any]]] = {
             "balance_subjects": True,
             "target_images_per_subject": 50,
             "include_ambient": False,
-            "face_detection": "mtcnn",
-            "face_crop_fallback": "skip",
-            "min_face_area_ratio": 0.08,
+            "face_detection": None,
+            "processing_profile": "yale_b_strong",
+            "quality_gate": "yale_b_strict",
+        },
+        "harsh_conditions": {
+            "min_images_per_subject": 50,
+            "max_images_per_subject": 50,
+            "max_subjects": 20,
+            "subject_selection": "most_images",
+            "include_ambient": False,
+            "face_detection": None,
+            "processing_profile": "standard",
+            "quality_gate": None,
+        },
+        "enhanced_conditions": {
+            "min_images_per_subject": 50,
+            "max_images_per_subject": 50,
+            "max_subjects": 20,
+            "subject_selection": "most_images",
+            "include_ambient": False,
+            "face_detection": None,
+            "processing_profile": "yale_b_strong",
+            "quality_gate": "yale_b_strict",
         },
         "many_people_many_images": {
-            "min_images_per_subject": 50,
-            "max_images_per_subject": 64,
+            "min_images_per_subject": 40,
+            "max_images_per_subject": 40,
+            "balance_subjects": True,
+            "target_images_per_subject": 40,
             "include_ambient": False,
-            "face_detection": "mtcnn",
-            "face_crop_fallback": "skip",
-            "min_face_area_ratio": 0.08,
+            "face_detection": None,
+            "processing_profile": "yale_b_strong",
+            "quality_gate": "yale_b_strict",
         },
         "many_images_few_people": {
             "min_images_per_subject": 59,
@@ -141,9 +184,9 @@ PROCESSING_PRESETS: dict[str, dict[str, dict[str, Any]]] = {
             "max_subjects": 20,
             "subject_selection": "most_images",
             "include_ambient": False,
-            "face_detection": "mtcnn",
-            "face_crop_fallback": "skip",
-            "min_face_area_ratio": 0.08,
+            "face_detection": None,
+            "processing_profile": "yale_b_strong",
+            "quality_gate": "yale_b_strict",
         },
     },
     "lfw": {
@@ -152,40 +195,36 @@ PROCESSING_PRESETS: dict[str, dict[str, dict[str, Any]]] = {
             "max_images_per_subject": 20,
             "balance_subjects": True,
             "target_images_per_subject": 20,
-            "face_detection": "mtcnn",
-            "face_padding_ratio": 0.25,
-            "face_crop_fallback": "skip",
-            "min_face_area_ratio": 0.08,
+            "face_detection": None,
+            "processing_profile": "standard",
+            "quality_gate": None,
         },
         "many_people_many_images": {
             "min_images_per_subject": 25,
             "max_images_per_subject": 25,
             "max_subjects": 40,
             "subject_selection": "most_images",
-            "face_detection": "mtcnn",
-            "face_padding_ratio": 0.25,
-            "face_crop_fallback": "skip",
-            "min_face_area_ratio": 0.08,
+            "face_detection": None,
+            "processing_profile": "standard",
+            "quality_gate": None,
         },
         "many_images_few_people": {
             "min_images_per_subject": 10,
             "max_images_per_subject": 10,
             "max_subjects": 100,
             "subject_selection": "most_images",
-            "face_detection": "mtcnn",
-            "face_padding_ratio": 0.25,
-            "face_crop_fallback": "skip",
-            "min_face_area_ratio": 0.08,
+            "face_detection": None,
+            "processing_profile": "standard",
+            "quality_gate": None,
         },
         "many_people_few_images": {
             "min_images_per_subject": 10,
             "max_images_per_subject": 10,
             "max_subjects": 100,
             "subject_selection": "most_images",
-            "face_detection": "mtcnn",
-            "face_padding_ratio": 0.25,
-            "face_crop_fallback": "skip",
-            "min_face_area_ratio": 0.08,
+            "face_detection": None,
+            "processing_profile": "standard",
+            "quality_gate": None,
         },
     },
 }
@@ -373,9 +412,9 @@ def _collect_samples(
 
 
 def _rank_subjects_for_selection(
-    grouped: dict[str, list[FaceSample]],
+    grouped: dict[str, list[Any]],
     subject_selection: str = "original",
-) -> list[tuple[str, list[FaceSample]]]:
+) -> list[tuple[str, list[Any]]]:
     items = list(grouped.items())
     if subject_selection == "original":
         return items
@@ -390,14 +429,14 @@ def _rank_subjects_for_selection(
 
 
 def _filter_samples_by_subject_count(
-    samples: list[FaceSample],
+    samples: list[Any],
     min_images_per_subject: int = 1,
     max_images_per_subject: int | None = None,
     max_subjects: int | None = None,
     subject_selection: str = "original",
     balance_subjects: bool = False,
     target_images_per_subject: int | None = None,
-) -> tuple[list[FaceSample], dict[str, Any]]:
+) -> tuple[list[Any], dict[str, Any]]:
     if min_images_per_subject < 1:
         raise ValueError("min_images_per_subject must be at least 1.")
     if max_images_per_subject is not None and max_images_per_subject < min_images_per_subject:
@@ -413,7 +452,7 @@ def _filter_samples_by_subject_count(
     ):
         raise ValueError("target_images_per_subject must be >= min_images_per_subject when balancing.")
 
-    grouped: dict[str, list[FaceSample]] = defaultdict(list)
+    grouped: dict[str, list[Any]] = defaultdict(list)
     for sample in samples:
         grouped[sample.subject_name].append(sample)
 
@@ -586,22 +625,35 @@ def analyze_subject_count_thresholds(
     face_scale_factor: float = 1.1,
     face_min_neighbors: int = 5,
     face_min_size: tuple[int, int] = (30, 30),
+    image_size: tuple[int, int] | None = IMAGE_SIZE,
+    normalize: bool = True,
+    flatten: bool = True,
+    processing_profile: str | None = "standard",
+    quality_gate: str | None = None,
 ) -> list[dict[str, Any]]:
     samples, resolved_raw_dir = _collect_samples(
         dataset_name=dataset_name,
         raw_dir=raw_dir,
         include_ambient=include_ambient,
     )
-    validated_samples, face_validation_stats = _validate_samples_with_face_detection(
+    processed_samples, preprocessing_payload = _preprocess_samples(
         samples=samples,
+        image_size=image_size,
+        normalize=normalize,
+        flatten=flatten,
         face_detection=face_detection,
+        face_padding_ratio=0.0,
+        face_crop_fallback="skip" if face_detection is not None else "original",
+        face_square_crop=False,
         min_face_area_ratio=min_face_area_ratio,
         face_scale_factor=face_scale_factor,
         face_min_neighbors=face_min_neighbors,
         face_min_size=face_min_size,
+        processing_profile=processing_profile,
+        quality_gate=quality_gate,
     )
     grouped: dict[str, list[FaceSample]] = defaultdict(list)
-    for sample in validated_samples:
+    for sample in processed_samples:
         grouped[sample.subject_name].append(sample)
 
     subject_counts = [len(subject_samples) for subject_samples in grouped.values()]
@@ -637,7 +689,9 @@ def analyze_subject_count_thresholds(
                 "threshold": threshold,
                 "face_detection": face_detection,
                 "min_face_area_ratio": min_face_area_ratio,
-                "face_validation_samples_after": face_validation_stats["face_validation_samples_after"],
+                "processing_profile": processing_profile,
+                "quality_gate": quality_gate,
+                "face_validation_samples_after": preprocessing_payload["stats"]["readable_samples"],
                 "subjects_kept": len(eligible_counts),
                 "samples_kept_without_cap": int(sum(eligible_counts)),
                 "samples_kept_if_balanced": int(len(eligible_counts) * threshold),
@@ -660,24 +714,55 @@ def get_dataset_processing_preset(
     return dict(PROCESSING_PRESETS[normalized_dataset][normalized_preset])
 
 
-def _load_and_preprocess_samples(
+def _summarize_quality_metrics(
+    processed_samples: list[ProcessedFaceSample],
+) -> dict[str, dict[str, float]]:
+    metric_names = [
+        "mean",
+        "std",
+        "dynamic_range",
+        "entropy",
+        "shadow_ratio",
+        "highlight_ratio",
+    ]
+    summary: dict[str, dict[str, float]] = {}
+    for metric_name in metric_names:
+        values = [
+            float(sample.quality_metadata[metric_name])
+            for sample in processed_samples
+            if sample.quality_metadata is not None and metric_name in sample.quality_metadata
+        ]
+        if not values:
+            continue
+        array = np.asarray(values, dtype=np.float64)
+        summary[metric_name] = {
+            "min": float(array.min()),
+            "mean": float(array.mean()),
+            "max": float(array.max()),
+        }
+    return summary
+
+
+def _preprocess_samples(
     samples: list[FaceSample],
     image_size: tuple[int, int] | None,
     normalize: bool,
     flatten: bool,
     face_detection: str | None = None,
-    face_padding_ratio: float = 0.25,
+    face_padding_ratio: float = 0.0,
     face_crop_fallback: str = "original",
-    face_square_crop: bool = True,
+    face_square_crop: bool = False,
     face_scale_factor: float = 1.1,
     face_min_neighbors: int = 5,
     face_min_size: tuple[int, int] = (30, 30),
     min_face_area_ratio: float = 0.0,
-) -> tuple[np.ndarray, dict[str, Any]]:
-    arrays: list[np.ndarray] = []
-    valid_samples: list[FaceSample] = []
+    processing_profile: str | None = "standard",
+    quality_gate: str | None = None,
+) -> tuple[list[ProcessedFaceSample], dict[str, Any]]:
+    processed_samples: list[ProcessedFaceSample] = []
     unreadable_files: list[str] = []
     skipped_no_face_files: list[str] = []
+    rejected_extreme_files: list[str] = []
     face_detected_samples = 0
     face_missed_samples = 0
     face_fallback_used_samples = 0
@@ -698,13 +783,14 @@ def _load_and_preprocess_samples(
                     face_scale_factor=face_scale_factor,
                     face_min_neighbors=face_min_neighbors,
                     face_min_size=face_min_size,
+                    processing_profile=processing_profile,
                     return_metadata=True,
                 )
         except (FileNotFoundError, UnidentifiedImageError, OSError):
             unreadable_files.append(str(sample.path))
             continue
 
-        if processed is None:
+        if processed is None or processing_metadata is None:
             skipped_no_face_files.append(str(sample.path))
             continue
         if processing_metadata["face_detection_enabled"]:
@@ -715,19 +801,38 @@ def _load_and_preprocess_samples(
             if processing_metadata["face_fallback_used"]:
                 face_fallback_used_samples += 1
 
-        arrays.append(processed)
-        valid_samples.append(sample)
+        quality_metadata = assess_processed_image_quality(
+            processed,
+            quality_gate=quality_gate,
+        )
+        if quality_metadata["rejected"]:
+            rejected_extreme_files.append(str(sample.path))
+            continue
 
-    if not arrays:
-        raise ValueError("No readable images remained after preprocessing.")
+        processed_samples.append(
+            ProcessedFaceSample(
+                path=sample.path,
+                subject_name=sample.subject_name,
+                sample_name=sample.sample_name,
+                array=np.asarray(processed, dtype=np.float32),
+                face_bbox=sample.face_bbox,
+                face_area_ratio=sample.face_area_ratio,
+                processing_metadata=processing_metadata,
+                quality_metadata=quality_metadata,
+            )
+        )
 
-    X = np.stack(arrays, axis=0)
+    if not processed_samples:
+        raise ValueError("No images remained after preprocessing and quality filtering.")
+
     stats = {
-        "readable_samples": len(valid_samples),
+        "readable_samples": len(processed_samples),
         "unreadable_samples": len(unreadable_files),
         "unreadable_files": unreadable_files,
         "skipped_no_face_samples": len(skipped_no_face_files),
         "skipped_no_face_files": skipped_no_face_files,
+        "rejected_extreme_samples": len(rejected_extreme_files),
+        "rejected_extreme_files": rejected_extreme_files,
         "face_detection_enabled": face_detection is not None,
         "face_detector": face_detection,
         "face_detected_samples": face_detected_samples,
@@ -740,8 +845,35 @@ def _load_and_preprocess_samples(
         "face_min_neighbors": face_min_neighbors,
         "face_min_size": list(face_min_size),
         "min_face_area_ratio": min_face_area_ratio,
+        "processing_profile": processing_profile,
+        "quality_gate": quality_gate,
+        "quality_metric_summary": _summarize_quality_metrics(processed_samples),
     }
-    return X, {"samples": valid_samples, "stats": stats}
+    return processed_samples, {"stats": stats}
+
+
+def _build_inputs_from_processed_samples(
+    processed_samples: list[ProcessedFaceSample],
+    processing_stats: dict[str, Any],
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    if not processed_samples:
+        raise ValueError("No processed samples were provided.")
+
+    X = np.stack([sample.array for sample in processed_samples], axis=0)
+    label_names = list(dict.fromkeys(sample.subject_name for sample in processed_samples))
+    label_mapping = {subject_name: index for index, subject_name in enumerate(label_names)}
+    y = np.asarray([label_mapping[sample.subject_name] for sample in processed_samples], dtype=int)
+
+    metadata = {
+        "file_paths": [str(sample.path) for sample in processed_samples],
+        "sample_names": [sample.sample_name for sample in processed_samples],
+        "subject_names": [sample.subject_name for sample in processed_samples],
+        "label_names": label_names,
+        "label_mapping": label_mapping,
+        "processing_stats": processing_stats,
+        "quality_metrics": [sample.quality_metadata or {} for sample in processed_samples],
+    }
+    return X, y, metadata
 
 
 def create_model_inputs(
@@ -757,8 +889,10 @@ def create_model_inputs(
     face_min_neighbors: int = 5,
     face_min_size: tuple[int, int] = (30, 30),
     min_face_area_ratio: float = 0.0,
+    processing_profile: str | None = "standard",
+    quality_gate: str | None = None,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
-    X, payload = _load_and_preprocess_samples(
+    processed_samples, payload = _preprocess_samples(
         samples=samples,
         image_size=image_size,
         normalize=normalize,
@@ -771,22 +905,10 @@ def create_model_inputs(
         face_min_neighbors=face_min_neighbors,
         face_min_size=face_min_size,
         min_face_area_ratio=min_face_area_ratio,
+        processing_profile=processing_profile,
+        quality_gate=quality_gate,
     )
-    valid_samples: list[FaceSample] = payload["samples"]
-
-    label_names = list(dict.fromkeys(sample.subject_name for sample in valid_samples))
-    label_mapping = {subject_name: index for index, subject_name in enumerate(label_names)}
-    y = np.asarray([label_mapping[sample.subject_name] for sample in valid_samples], dtype=int)
-
-    metadata = {
-        "file_paths": [str(sample.path) for sample in valid_samples],
-        "sample_names": [sample.sample_name for sample in valid_samples],
-        "subject_names": [sample.subject_name for sample in valid_samples],
-        "label_names": label_names,
-        "label_mapping": label_mapping,
-        "processing_stats": payload["stats"],
-    }
-    return X, y, metadata
+    return _build_inputs_from_processed_samples(processed_samples, payload["stats"])
 
 
 def _build_dataset_output_dir(
@@ -803,8 +925,11 @@ def _build_dataset_output_dir(
     include_ambient: bool,
     face_detection: str | None,
     face_padding_ratio: float,
+    face_square_crop: bool,
     face_crop_fallback: str,
     min_face_area_ratio: float,
+    processing_profile: str | None = "standard",
+    quality_gate: str | None = None,
 ) -> Path:
     normalized = _normalize_dataset_name(dataset_name)
     width, height = image_size or IMAGE_SIZE
@@ -824,7 +949,12 @@ def _build_dataset_output_dir(
     if face_detection is not None:
         padding_token = int(round(face_padding_ratio * 100))
         area_token = int(round(min_face_area_ratio * 100))
-        config_parts.append(f"face{face_detection}_pad{padding_token}_area{area_token}_{face_crop_fallback}")
+        square_token = "square" if face_square_crop else "nosquare"
+        config_parts.append(f"face{face_detection}_pad{padding_token}_area{area_token}_{square_token}_{face_crop_fallback}")
+    if processing_profile and processing_profile != "standard":
+        config_parts.append(f"prep{_normalize_dataset_name(processing_profile)}")
+    if quality_gate:
+        config_parts.append(f"q{_normalize_dataset_name(quality_gate)}")
     config_id = "_".join(config_parts)
     return Path(output_root) / normalized / config_id
 
@@ -963,6 +1093,51 @@ def save_processed_dataset_bundle(
     return output_path
 
 
+def _processed_dataset_bundle_exists(processed_dir: str | Path) -> bool:
+    processed_path = Path(processed_dir)
+    required_files = [
+        processed_path / "inputs.npz",
+        processed_path / "summary.json",
+        processed_path / "label_mapping.json",
+        processed_path / "manifest.csv",
+        processed_path / "manifest_train.csv",
+        processed_path / "manifest_test.csv",
+    ]
+    return all(path.exists() for path in required_files)
+
+
+def resolve_processed_dataset_bundle_dir(
+    dataset_name: str,
+    preset_name: str,
+    output_root: str | Path = PROCESSED_DIR,
+    image_size: tuple[int, int] | None = IMAGE_SIZE,
+    flatten: bool = True,
+    **overrides,
+) -> Path:
+    config = get_dataset_processing_preset(dataset_name, preset_name)
+    config.update(overrides)
+    return _build_dataset_output_dir(
+        dataset_name=dataset_name,
+        output_root=output_root,
+        min_images_per_subject=config["min_images_per_subject"],
+        max_images_per_subject=config.get("max_images_per_subject"),
+        max_subjects=config.get("max_subjects"),
+        subject_selection=config.get("subject_selection", "original"),
+        balance_subjects=config.get("balance_subjects", False),
+        target_images_per_subject=config.get("target_images_per_subject"),
+        image_size=image_size,
+        flatten=flatten,
+        include_ambient=config.get("include_ambient", False),
+        face_detection=config.get("face_detection"),
+        face_padding_ratio=config.get("face_padding_ratio", 0.25),
+        face_square_crop=config.get("face_square_crop", False),
+        face_crop_fallback=config.get("face_crop_fallback", "original"),
+        min_face_area_ratio=config.get("min_face_area_ratio", 0.0),
+        processing_profile=config.get("processing_profile", "standard"),
+        quality_gate=config.get("quality_gate"),
+    )
+
+
 def load_processed_dataset_bundle(processed_dir: str | Path) -> dict[str, Any]:
     processed_path = Path(processed_dir)
     with np.load(processed_path / "inputs.npz", allow_pickle=True) as npz_file:
@@ -988,28 +1163,58 @@ def load_processed_dataset_bundle(processed_dir: str | Path) -> dict[str, Any]:
             "image_size": tuple(npz_file["image_size"].tolist()),
             "image_shape": tuple(npz_file["image_shape"].tolist()),
         }
+    with (processed_path / "label_mapping.json").open("r", encoding="utf-8") as json_file:
+        label_mapping = json.load(json_file)
     bundle["metadata"] = {
         "file_paths": bundle["file_paths"],
         "sample_names": bundle["sample_names"],
         "subject_names": bundle["subject_names"],
         "label_names": bundle["label_names"],
+        "label_mapping": label_mapping,
     }
     bundle["train_metadata"] = {
         "file_paths": bundle["train_file_paths"],
         "sample_names": bundle["train_sample_names"],
         "subject_names": bundle["train_subject_names"],
         "label_names": bundle["label_names"],
+        "label_mapping": label_mapping,
     }
     bundle["test_metadata"] = {
         "file_paths": bundle["test_file_paths"],
         "sample_names": bundle["test_sample_names"],
         "subject_names": bundle["test_subject_names"],
         "label_names": bundle["label_names"],
+        "label_mapping": label_mapping,
     }
 
     with (processed_path / "summary.json").open("r", encoding="utf-8") as json_file:
         bundle["summary"] = json.load(json_file)
+    bundle["output_dir"] = str(processed_path)
+    bundle["loaded_from_cache"] = True
     return bundle
+
+
+def load_processed_dataset_bundle_for_preset(
+    dataset_name: str,
+    preset_name: str,
+    output_root: str | Path = PROCESSED_DIR,
+    image_size: tuple[int, int] | None = IMAGE_SIZE,
+    flatten: bool = True,
+    **overrides,
+) -> dict[str, Any]:
+    processed_dir = resolve_processed_dataset_bundle_dir(
+        dataset_name=dataset_name,
+        preset_name=preset_name,
+        output_root=output_root,
+        image_size=image_size,
+        flatten=flatten,
+        **overrides,
+    )
+    if not _processed_dataset_bundle_exists(processed_dir):
+        raise FileNotFoundError(
+            f"Processed dataset bundle does not exist yet: {processed_dir}"
+        )
+    return load_processed_dataset_bundle(processed_dir)
 
 
 def process_face_dataset(
@@ -1030,39 +1235,49 @@ def process_face_dataset(
     stratify: bool = True,
     include_ambient: bool = False,
     face_detection: str | None = None,
-    face_padding_ratio: float = 0.25,
+    face_padding_ratio: float = 0.0,
     face_crop_fallback: str = "original",
-    face_square_crop: bool = True,
+    face_square_crop: bool = False,
     face_scale_factor: float = 1.1,
     face_min_neighbors: int = 5,
     face_min_size: tuple[int, int] = (30, 30),
     min_face_area_ratio: float = 0.0,
+    processing_profile: str | None = "standard",
+    quality_gate: str | None = None,
+    reuse_existing: bool = True,
+    force_rebuild: bool = False,
     save_artifacts: bool = True,
 ) -> dict[str, Any]:
-    collected_samples, resolved_raw_dir = _collect_samples(
+    output_dir = _build_dataset_output_dir(
         dataset_name=dataset_name,
-        raw_dir=raw_dir,
-        include_ambient=include_ambient,
-    )
-    face_validated_samples, face_validation_stats = _validate_samples_with_face_detection(
-        collected_samples,
-        face_detection=face_detection,
-        min_face_area_ratio=min_face_area_ratio,
-        face_scale_factor=face_scale_factor,
-        face_min_neighbors=face_min_neighbors,
-        face_min_size=face_min_size,
-    )
-    filtered_samples, filter_stats = _filter_samples_by_subject_count(
-        face_validated_samples,
+        output_root=output_root,
         min_images_per_subject=min_images_per_subject,
         max_images_per_subject=max_images_per_subject,
         max_subjects=max_subjects,
         subject_selection=subject_selection,
         balance_subjects=balance_subjects,
         target_images_per_subject=target_images_per_subject,
+        image_size=image_size,
+        flatten=flatten,
+        include_ambient=include_ambient,
+        face_detection=face_detection,
+        face_padding_ratio=face_padding_ratio,
+        face_square_crop=face_square_crop,
+        face_crop_fallback=face_crop_fallback,
+        min_face_area_ratio=min_face_area_ratio,
+        processing_profile=processing_profile,
+        quality_gate=quality_gate,
     )
-    X, y, metadata = create_model_inputs(
-        samples=filtered_samples,
+    if save_artifacts and reuse_existing and not force_rebuild and _processed_dataset_bundle_exists(output_dir):
+        return load_processed_dataset_bundle(output_dir)
+
+    collected_samples, resolved_raw_dir = _collect_samples(
+        dataset_name=dataset_name,
+        raw_dir=raw_dir,
+        include_ambient=include_ambient,
+    )
+    preprocessed_samples, preprocessing_payload = _preprocess_samples(
+        collected_samples,
         image_size=image_size,
         normalize=normalize,
         flatten=flatten,
@@ -1070,10 +1285,40 @@ def process_face_dataset(
         face_padding_ratio=face_padding_ratio,
         face_crop_fallback=face_crop_fallback,
         face_square_crop=face_square_crop,
+        min_face_area_ratio=min_face_area_ratio,
         face_scale_factor=face_scale_factor,
         face_min_neighbors=face_min_neighbors,
         face_min_size=face_min_size,
-        min_face_area_ratio=min_face_area_ratio,
+        processing_profile=processing_profile,
+        quality_gate=quality_gate,
+    )
+    face_validation_stats = {
+        "face_validation_enabled": face_detection is not None,
+        "face_validation_samples_before": len(collected_samples),
+        "face_validation_samples_after": len(preprocessed_samples),
+        "face_validation_valid_samples": len(preprocessed_samples),
+        "face_validation_no_face_samples": preprocessing_payload["stats"]["skipped_no_face_samples"],
+        "face_validation_small_face_samples": 0,
+        "face_validation_unreadable_samples": preprocessing_payload["stats"]["unreadable_samples"],
+        "face_validation_detector": face_detection,
+        "face_validation_min_face_area_ratio": min_face_area_ratio,
+        "quality_filter_rejected_samples": preprocessing_payload["stats"]["rejected_extreme_samples"],
+        "note": "Subject thresholds are applied after preprocessing and quality filtering.",
+    }
+    filtered_samples, filter_stats = _filter_samples_by_subject_count(
+        preprocessed_samples,
+        min_images_per_subject=min_images_per_subject,
+        max_images_per_subject=max_images_per_subject,
+        max_subjects=max_subjects,
+        subject_selection=subject_selection,
+        balance_subjects=balance_subjects,
+        target_images_per_subject=target_images_per_subject,
+    )
+    if not filtered_samples:
+        raise ValueError("No samples remained after preprocessing, quality filtering, and subject thresholds.")
+    X, y, metadata = _build_inputs_from_processed_samples(
+        filtered_samples,
+        preprocessing_payload["stats"],
     )
     train_indices, test_indices, stratify_used = _build_split_indices(
         y=y,
@@ -1107,6 +1352,8 @@ def process_face_dataset(
         "face_min_neighbors": face_min_neighbors,
         "face_min_size": list(face_min_size),
         "min_face_area_ratio": min_face_area_ratio,
+        "processing_profile": processing_profile,
+        "quality_gate": quality_gate,
         "normalize": normalize,
         "flatten": flatten,
         "image_size": list(image_size or IMAGE_SIZE),
@@ -1131,24 +1378,6 @@ def process_face_dataset(
         "processing_stats": metadata["processing_stats"],
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }
-
-    output_dir = _build_dataset_output_dir(
-        dataset_name=dataset_name,
-        output_root=output_root,
-        min_images_per_subject=min_images_per_subject,
-        max_images_per_subject=max_images_per_subject,
-        max_subjects=max_subjects,
-        subject_selection=subject_selection,
-        balance_subjects=balance_subjects,
-        target_images_per_subject=target_images_per_subject,
-        image_size=image_size,
-        flatten=flatten,
-        include_ambient=include_ambient,
-        face_detection=face_detection,
-        face_padding_ratio=face_padding_ratio,
-        face_crop_fallback=face_crop_fallback,
-        min_face_area_ratio=min_face_area_ratio,
-    )
     if save_artifacts:
         save_processed_dataset_bundle(
             X=X,
@@ -1174,6 +1403,7 @@ def process_face_dataset(
         "test_metadata": test_metadata,
         "summary": summary,
         "output_dir": str(output_dir),
+        "loaded_from_cache": False,
     }
 
 
@@ -1190,15 +1420,11 @@ def process_face_dataset_with_preset(
 def build_face_database_from_directory(
     source_dir: str | Path,
     database_name: str | None = None,
+    source_label: str | None = None,
     output_root: str | Path = PROCESSED_DIR,
-    min_images_per_subject: int = 2,
-    max_images_per_subject: int | None = None,
     image_size: tuple[int, int] | None = IMAGE_SIZE,
     normalize: bool = True,
     flatten: bool = True,
-    test_size: float = 0.0,
-    random_state: int = RANDOM_STATE,
-    stratify: bool = True,
     face_detection: str | None = "mtcnn",
     face_padding_ratio: float = 0.25,
     face_crop_fallback: str = "original",
@@ -1207,6 +1433,8 @@ def build_face_database_from_directory(
     face_min_neighbors: int = 5,
     face_min_size: tuple[int, int] = (30, 30),
     min_face_area_ratio: float = 0.0,
+    processing_profile: str | None = "standard",
+    quality_gate: str | None = None,
     save_artifacts: bool = True,
 ) -> dict[str, Any]:
     resolved_source_dir = Path(source_dir).expanduser().resolve()
@@ -1214,24 +1442,8 @@ def build_face_database_from_directory(
     profile_slug = re.sub(r"[^a-z0-9]+", "_", profile_title.lower()).strip("_") or "database"
 
     collected_samples = _collect_custom_folder_samples(resolved_source_dir)
-    face_validated_samples, face_validation_stats = _validate_samples_with_face_detection(
-        collected_samples,
-        face_detection=face_detection,
-        min_face_area_ratio=min_face_area_ratio,
-        face_scale_factor=face_scale_factor,
-        face_min_neighbors=face_min_neighbors,
-        face_min_size=face_min_size,
-    )
-    filtered_samples, filter_stats = _filter_samples_by_subject_count(
-        face_validated_samples,
-        min_images_per_subject=min_images_per_subject,
-        max_images_per_subject=max_images_per_subject,
-        subject_selection="original",
-        balance_subjects=False,
-        target_images_per_subject=None,
-    )
     X, y, metadata = create_model_inputs(
-        samples=filtered_samples,
+        samples=collected_samples,
         image_size=image_size,
         normalize=normalize,
         flatten=flatten,
@@ -1243,20 +1455,11 @@ def build_face_database_from_directory(
         face_min_neighbors=face_min_neighbors,
         face_min_size=face_min_size,
         min_face_area_ratio=min_face_area_ratio,
+        processing_profile=processing_profile,
+        quality_gate=quality_gate,
     )
-
-    if test_size > 0:
-        train_indices, test_indices, stratify_used = _build_split_indices(
-            y=y,
-            test_size=test_size,
-            random_state=random_state,
-            stratify=stratify,
-        )
-    else:
-        train_indices = np.arange(y.shape[0], dtype=int)
-        test_indices = np.empty((0,), dtype=int)
-        stratify_used = False
-
+    train_indices = np.arange(y.shape[0], dtype=int)
+    test_indices = np.empty((0,), dtype=int)
     X_train = X[train_indices]
     X_test = X[test_indices] if test_indices.size else np.empty((0, *X.shape[1:]), dtype=X.dtype)
     y_train = y[train_indices]
@@ -1265,14 +1468,44 @@ def build_face_database_from_directory(
     test_metadata = _subset_metadata(metadata, test_indices)
 
     label_distribution = Counter(y.tolist())
+    face_validation_stats = {
+        "face_validation_enabled": False,
+        "face_validation_samples_before": len(collected_samples),
+        "face_validation_samples_after": len(collected_samples),
+        "face_validation_valid_samples": len(collected_samples),
+        "face_validation_no_face_samples": 0,
+        "face_validation_small_face_samples": 0,
+        "face_validation_unreadable_samples": 0,
+        "face_validation_detector": None,
+        "face_validation_min_face_area_ratio": min_face_area_ratio,
+        "note": "Custom build preprocesses images directly and may use MTCNN during build time for alignment/cropping.",
+    }
+    filter_stats = {
+        "subjects_before_filter": len({sample.subject_name for sample in collected_samples}),
+        "subjects_after_filter": len({sample.subject_name for sample in collected_samples}),
+        "samples_before_filter": len(collected_samples),
+        "samples_after_filter": len(collected_samples),
+        "dropped_subjects": {},
+        "dropped_subjects_below_min": {},
+        "dropped_subjects_by_subject_limit": {},
+        "truncated_subjects": {},
+        "truncated_subjects_by_max_images": {},
+        "truncated_subjects_by_balancing": {},
+        "max_subjects": None,
+        "subject_selection": "original",
+        "balance_subjects": False,
+        "target_images_per_subject": None,
+        "balance_images_per_subject": None,
+        "note": "Deployment database build keeps all valid images from each person folder.",
+    }
     summary = {
         "dataset_name": "custom",
         "database_name": profile_title,
         "profile_slug": profile_slug,
         "profile_title": profile_title,
-        "raw_dir": str(resolved_source_dir),
-        "min_images_per_subject": min_images_per_subject,
-        "max_images_per_subject": max_images_per_subject,
+        "raw_dir": source_label or str(resolved_source_dir),
+        "min_images_per_subject": 1,
+        "max_images_per_subject": None,
         "max_subjects": None,
         "subject_selection": "original",
         "balance_subjects": False,
@@ -1286,21 +1519,17 @@ def build_face_database_from_directory(
         "face_min_neighbors": face_min_neighbors,
         "face_min_size": list(face_min_size),
         "min_face_area_ratio": min_face_area_ratio,
+        "processing_profile": processing_profile,
+        "quality_gate": quality_gate,
         "normalize": normalize,
         "flatten": flatten,
         "image_size": list(image_size or IMAGE_SIZE),
         "image_shape": list(IMAGE_SHAPE if image_size is None else (image_size[1], image_size[0])),
-        "test_size": test_size,
-        "random_state": random_state,
-        "stratify_requested": stratify,
-        "stratify_used": stratify_used,
         "samples_total": int(X.shape[0]),
         "train_samples": int(X_train.shape[0]),
-        "test_samples": int(X_test.shape[0]),
         "classes_total": len(metadata["label_names"]),
         "feature_shape": list(X.shape),
         "train_shape": list(X_train.shape),
-        "test_shape": list(X_test.shape),
         "label_distribution": {str(label): count for label, count in sorted(label_distribution.items())},
         "face_validation_stats": face_validation_stats,
         "filter_stats": filter_stats,
@@ -1308,6 +1537,8 @@ def build_face_database_from_directory(
         "truncated_subject_count": len(filter_stats["truncated_subjects"]),
         "balance_images_per_subject": filter_stats["balance_images_per_subject"],
         "processing_stats": metadata["processing_stats"],
+        "deployment_ready": True,
+        "build_purpose": "demo_recognition",
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -1343,7 +1574,7 @@ def build_face_database_from_directory(
 def process_orl_dataset(**kwargs) -> dict[str, Any]:
     return process_face_dataset_with_preset(
         dataset_name="orl",
-        preset_name="balanced",
+        preset_name=kwargs.pop("preset_name", "balanced"),
         raw_dir=kwargs.pop("raw_dir", ORL_DATA_DIR),
         **kwargs,
     )
@@ -1352,7 +1583,7 @@ def process_orl_dataset(**kwargs) -> dict[str, Any]:
 def process_extended_yale_b_dataset(**kwargs) -> dict[str, Any]:
     return process_face_dataset_with_preset(
         dataset_name="extended_yale_b",
-        preset_name="many_images_few_people",
+        preset_name=kwargs.pop("preset_name", "enhanced_conditions"),
         raw_dir=kwargs.pop("raw_dir", EXTENDED_YALE_B_DIR),
         **kwargs,
     )
@@ -1385,13 +1616,13 @@ def process_all_face_datasets(
             "dataset_name": "orl",
             **get_dataset_processing_preset("orl", "balanced"),
         },
-        "lfw_many_people_many_images": {
-            "dataset_name": "lfw",
-            **get_dataset_processing_preset("lfw", "many_people_many_images"),
+        "extended_yale_b_harsh_conditions": {
+            "dataset_name": "extended_yale_b",
+            **get_dataset_processing_preset("extended_yale_b", "harsh_conditions"),
         },
-        "lfw_many_people_few_images": {
-            "dataset_name": "lfw",
-            **get_dataset_processing_preset("lfw", "many_people_few_images"),
+        "extended_yale_b_enhanced_conditions": {
+            "dataset_name": "extended_yale_b",
+            **get_dataset_processing_preset("extended_yale_b", "enhanced_conditions"),
         },
     }
     results: dict[str, dict[str, Any]] = {}
@@ -1399,5 +1630,35 @@ def process_all_face_datasets(
         config = dict(config)
         dataset_name = config.pop("dataset_name", result_name)
         config.setdefault("output_root", output_root)
+        results[result_name] = process_face_dataset(dataset_name=dataset_name, **config)
+    return results
+
+
+def prebuild_representative_face_datasets(
+    output_root: str | Path = PROCESSED_DIR,
+    force_rebuild: bool = False,
+) -> dict[str, dict[str, Any]]:
+    configs = {
+        "orl_balanced": {
+            "dataset_name": "orl",
+            **get_dataset_processing_preset("orl", "balanced"),
+        },
+        "extended_yale_b_harsh_conditions": {
+            "dataset_name": "extended_yale_b",
+            **get_dataset_processing_preset("extended_yale_b", "harsh_conditions"),
+        },
+        "extended_yale_b_enhanced_conditions": {
+            "dataset_name": "extended_yale_b",
+            **get_dataset_processing_preset("extended_yale_b", "enhanced_conditions"),
+        },
+    }
+    results: dict[str, dict[str, Any]] = {}
+    for result_name, config in configs.items():
+        config = dict(config)
+        dataset_name = config.pop("dataset_name")
+        config["output_root"] = output_root
+        config["save_artifacts"] = True
+        config["reuse_existing"] = not force_rebuild
+        config["force_rebuild"] = force_rebuild
         results[result_name] = process_face_dataset(dataset_name=dataset_name, **config)
     return results

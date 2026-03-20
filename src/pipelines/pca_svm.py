@@ -88,6 +88,13 @@ class PCASVMPipeline:
         joblib.dump(self, output_path)
         return output_path
 
+    def save_model(self, path: str | Path) -> Path:
+        return self.save(path)
+
     @classmethod
     def load(cls, path: str | Path) -> "PCASVMPipeline":
         return joblib.load(path)
+
+    @classmethod
+    def load_model(cls, path: str | Path) -> "PCASVMPipeline":
+        return cls.load(path)

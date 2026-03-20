@@ -4,6 +4,7 @@ from .dataset_processing import (
     build_face_database_from_directory,
     create_model_inputs,
     get_dataset_processing_preset,
+    load_processed_dataset_bundle_for_preset,
     load_processed_dataset_bundle,
     process_all_face_datasets,
     process_extended_yale_b_dataset,
@@ -12,6 +13,8 @@ from .dataset_processing import (
     process_lfw_dataset,
     process_lfw_many_people_few_images_dataset,
     process_orl_dataset,
+    prebuild_representative_face_datasets,
+    resolve_processed_dataset_bundle_dir,
     save_processed_dataset_bundle,
 )
 
@@ -21,6 +24,7 @@ __all__ = [
     "build_face_database_from_directory",
     "create_model_inputs",
     "get_dataset_processing_preset",
+    "load_processed_dataset_bundle_for_preset",
     "load_processed_dataset_bundle",
     "process_all_face_datasets",
     "process_extended_yale_b_dataset",
@@ -29,5 +33,7 @@ __all__ = [
     "process_lfw_dataset",
     "process_lfw_many_people_few_images_dataset",
     "process_orl_dataset",
+    "prebuild_representative_face_datasets",
+    "resolve_processed_dataset_bundle_dir",
     "save_processed_dataset_bundle",
 ]

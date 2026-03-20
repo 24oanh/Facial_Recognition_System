@@ -1,6 +1,7 @@
 import json
 import pandas as pd
 from pathlib import Path
+from typing import Any
 
 
 def summarize_results(eval_dict: dict, model_name: str) -> pd.Series:
@@ -28,17 +29,47 @@ def summarize_results(eval_dict: dict, model_name: str) -> pd.Series:
     )
 
 
+def _normalize_model_results(*eval_inputs: Any) -> list[tuple[dict, str]]:
+    if len(eval_inputs) == 1 and isinstance(eval_inputs[0], dict):
+        model_results = eval_inputs[0]
+        if model_results and all(isinstance(value, dict) for value in model_results.values()):
+            return [(eval_dict, model_name) for model_name, eval_dict in model_results.items()]
+
+    normalized: list[tuple[dict, str]] = []
+    for item in eval_inputs:
+        if not isinstance(item, tuple) or len(item) != 2:
+            raise TypeError(
+                "compare_models expects either a dict {model_name: eval_dict} "
+                "or tuples in the form (eval_dict, model_name)."
+            )
+        eval_dict, model_name = item
+        if not isinstance(eval_dict, dict):
+            raise TypeError("Each evaluation result must be a dict returned by model.evaluate().")
+        normalized.append((eval_dict, model_name))
+    return normalized
+
+
 def compare_models(*eval_tuples) -> pd.DataFrame:
     """
     So sánh nhiều mô hình.
 
     Usage:
         df = compare_models(
+            {
+                "PCA+KNN": knn_eval,
+                "PCA+SVM": svm_eval,
+            }
+        )
+
+        Hoặc:
+
+        df = compare_models(
             (knn_eval, "PCA+KNN"),
             (svm_eval, "PCA+SVM"),
         )
     """
-    rows = [summarize_results(d, name) for d, name in eval_tuples]
+    normalized_results = _normalize_model_results(*eval_tuples)
+    rows = [summarize_results(d, name) for d, name in normalized_results]
     df = pd.DataFrame(rows).set_index("Model")
     print(df.to_string())
     return df

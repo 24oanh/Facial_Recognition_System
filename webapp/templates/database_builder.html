@@ -2,8 +2,9 @@
 <div class="card">
   <h2>Database Builder</h2>
   <p class="subtitle">
-    Chức năng này dùng để tạo database nhận diện từ thư mục ảnh thực tế:
-    mỗi folder con là một người, tên folder chính là danh tính cần nhận diện.
+    Tính năng này phục vụ demo nhận diện trực tiếp: hệ thống sẽ build toàn bộ
+    database từ thư mục ảnh theo folder tên người, sau đó train lại model để
+    dùng ngay trong trang nhận dạng và realtime.
   </p>
 
   <div class="builder-intro">
@@ -22,92 +23,52 @@
     └── 2.png</pre>
     </div>
     <div class="intro-card">
-      <div class="intro-title">Flow sử dụng</div>
+      <div class="intro-title">Nguyên tắc build</div>
       <div class="intro-copy">
-        Bước 1: build database từ thư mục folder tên người.<br />
-        Bước 2: train model từ database vừa tạo hoặc từ bundle đã có.<br />
-        Bước 3: model mới sẽ xuất hiện ở trang nhận dạng và realtime.
+        MTCNN được dùng mặc định khi build database.<br />
+        Hệ thống lấy toàn bộ ảnh trong từng folder người, không chia test
+        split, không giữ lại ảnh để đánh giá thông số.<br />
+        Sau khi chạy xong, model mới sẽ xuất hiện ngay ở trang nhận dạng và realtime.
       </div>
     </div>
   </div>
 
-  <div class="model-tabs">
-    <button class="model-tab active" data-target="database-form">Build Database</button>
-    <button class="model-tab" data-target="train-form">Train Model</button>
-  </div>
+  <div class="form-shell">
+    <h3 class="section-title">Build database và train model</h3>
 
-  <div class="form-section active" id="database-form">
-    <h3 class="section-title">Tạo database từ thư mục ảnh</h3>
     <div class="form-row">
       <div class="form-group form-group-wide">
         <label>Thư mục nguồn</label>
-        <input type="text" id="db-source-dir" placeholder="D:\du_lieu\guest_faces" />
+        <div class="folder-picker">
+          <input type="text" id="source-dir-display" placeholder="Chưa chọn folder" readonly />
+          <button type="button" class="btn-secondary" onclick="openFolderDialog()">Chọn folder</button>
+        </div>
+        <input type="file" id="source-folder-input" webkitdirectory multiple hidden />
         <div class="field-help">
-          Nhập đường dẫn trên chính máy đang chạy web app. Mỗi folder con là một người.
+          Chọn trực tiếp folder nguồn từ máy. Browser sẽ gửi toàn bộ nội dung folder đó để build database.
         </div>
       </div>
       <div class="form-group">
         <label>Tên database</label>
-        <input type="text" id="db-name" placeholder="nguoi_moi_su_kien_2026" />
+        <input type="text" id="database-name" placeholder="nguoi_moi_su_kien_2026" />
       </div>
     </div>
 
     <div class="form-row">
       <div class="form-group">
-        <label>Số ảnh tối thiểu mỗi người</label>
-        <input type="number" id="db-min-images" value="2" min="1" />
-      </div>
-      <div class="form-group">
-        <label>Số ảnh tối đa mỗi người</label>
-        <input type="number" id="db-max-images" placeholder="Để trống nếu không giới hạn" min="1" />
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label>Tỷ lệ test / đánh giá</label>
-        <input type="number" id="db-test-size" value="0" min="0" max="0.9" step="0.05" />
-        <div class="field-help">Đặt `0` nếu muốn dùng toàn bộ ảnh cho database deploy.</div>
-      </div>
-      <div class="form-group">
-        <label>Face Detection</label>
-        <select id="db-face-detection">
-          <option value="auto">MTCNN mặc định</option>
-          <option value="none">Không dùng</option>
-          <option value="haar">Haar</option>
-          <option value="mtcnn">MTCNN</option>
+        <label>Model train</label>
+        <select id="model-scope">
+          <option value="both">PCA + KNN và PCA + SVM</option>
+          <option value="pca_knn">Chỉ PCA + KNN</option>
+          <option value="pca_svm">Chỉ PCA + SVM</option>
         </select>
       </div>
-    </div>
-
-    <button class="btn" onclick="startBuild('build_database')">Tạo database</button>
-  </div>
-
-  <div class="form-section" id="train-form">
-    <h3 class="section-title">Train model từ database đã có</h3>
-
-    <div class="form-row">
-      <div class="form-group form-group-wide">
-        <label>Database / processed bundle</label>
-        <select id="train-bundle-relative" onchange="updateBundleHint()">
-          {% if bundle_options %}
-          {% for item in bundle_options %}
-          <option value="{{ item.value }}" data-hint="{{ item.hint }}">{{ item.label }}</option>
-          {% endfor %}
-          {% else %}
-          <option value="">Chưa có database nào</option>
-          {% endif %}
-        </select>
-        <div class="field-help" id="bundle-hint">
-          {% if bundle_options %}{{ bundle_options[0].hint }}{% else %}Hãy build database trước.{% endif %}
+      <div class="form-group">
+        <label>Tiền tố file output</label>
+        <input type="text" id="output-name" placeholder="demo_nguoi_moi_2026" />
+        <div class="field-help">
+          Nếu train cả hai model, hệ thống sẽ tự thêm tiền tố `pca_knn_` và `pca_svm_`.
         </div>
-      </div>
-      <div class="form-group">
-        <label>Model</label>
-        <select id="train-model-type">
-          <option value="pca_knn">PCA + KNN</option>
-          <option value="pca_svm">PCA + SVM</option>
-        </select>
       </div>
     </div>
 
@@ -117,16 +78,12 @@
         <input type="number" id="train-n-components" value="20" min="2" />
       </div>
       <div class="form-group">
-        <label>Tên file output</label>
-        <input type="text" id="train-output-name" placeholder="pca_knn_custom_guest.joblib" />
+        <label>KNN k</label>
+        <input type="number" id="train-k" value="3" min="1" />
       </div>
     </div>
 
     <div class="form-row">
-      <div class="form-group">
-        <label>KNN k</label>
-        <input type="number" id="train-k" value="3" min="1" />
-      </div>
       <div class="form-group">
         <label>KNN metric</label>
         <select id="train-metric">
@@ -135,13 +92,13 @@
           <option value="manhattan">manhattan</option>
         </select>
       </div>
-    </div>
-
-    <div class="form-row">
       <div class="form-group">
         <label>SVM C</label>
         <input type="number" id="train-c" value="1.0" step="0.1" min="0.1" />
       </div>
+    </div>
+
+    <div class="form-row">
       <div class="form-group">
         <label>SVM kernel</label>
         <select id="train-kernel">
@@ -150,18 +107,18 @@
           <option value="poly">poly</option>
         </select>
       </div>
-    </div>
-
-    <div class="form-row">
       <div class="form-group">
         <label>SVM gamma</label>
-        <input type="text" id="train-gamma" value="scale" />
+        <select id="train-gamma-mode" onchange="toggleGammaCustom()">
+          <option value="scale">scale</option>
+          <option value="auto">auto</option>
+          <option value="custom">custom</option>
+        </select>
+        <input type="text" id="train-gamma-custom" placeholder="Ví dụ: 0.01" style="display: none; margin-top: 10px" />
       </div>
     </div>
 
-    <button class="btn" onclick="startBuild('train_model')" {% if not bundle_options %}disabled{% endif %}>
-      Bắt đầu Train
-    </button>
+    <button class="btn" onclick="startBuild()">Build database và train model</button>
   </div>
 
   <div class="progress-section" id="progress-section">
@@ -203,15 +160,16 @@
   }
 
   .intro-card,
-  .form-group input,
-  .form-group select {
-    border-radius: 12px;
-  }
-
-  .intro-card {
+  .form-shell {
     background: rgba(37, 99, 235, 0.03);
     border: 1px solid rgba(37, 99, 235, 0.1);
-    padding: 18px 20px;
+    border-radius: 14px;
+    padding: 20px;
+  }
+
+  .form-shell {
+    background: white;
+    border-color: var(--border);
   }
 
   .intro-title,
@@ -238,54 +196,8 @@
     font-family: Consolas, "Courier New", monospace;
   }
 
-  .model-tabs {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 24px;
-    border-bottom: 2px solid var(--border);
-  }
-
-  .model-tab {
-    padding: 12px 24px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    background: none;
-    border: none;
-    cursor: pointer;
-    position: relative;
-    font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
-  }
-
-  .model-tab.active {
-    color: var(--primary);
-  }
-
-  .model-tab.active::after {
-    content: "";
-    position: absolute;
-    bottom: -2px;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: var(--primary);
-  }
-
-  .form-section {
-    display: none;
-  }
-
-  .form-section.active,
-  .progress-section.active {
-    display: block;
-  }
-
   .form-group {
     margin-bottom: 18px;
-  }
-
-  .form-group-wide {
-    grid-column: span 1;
   }
 
   .form-group label {
@@ -301,8 +213,19 @@
     width: 100%;
     padding: 10px 14px;
     border: 2px solid var(--border);
+    border-radius: 12px;
     font-size: 14px;
     font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  }
+
+  .folder-picker {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .folder-picker input {
+    flex: 1;
   }
 
   .field-help {
@@ -314,6 +237,10 @@
 
   .progress-section {
     display: none;
+  }
+
+  .progress-section.active {
+    display: block;
   }
 
   .progress-header {
@@ -392,51 +319,71 @@
 </style>
 
 <script>
+  const sourceFolderInput = document.getElementById("source-folder-input");
+
+  function openFolderDialog() {
+    if (sourceFolderInput.showPicker) sourceFolderInput.showPicker();
+    else sourceFolderInput.click();
+  }
+
+  sourceFolderInput.addEventListener("change", () => {
+    const display = document.getElementById("source-dir-display");
+    const files = Array.from(sourceFolderInput.files || []);
+    if (!files.length) {
+      display.value = "";
+      return;
+    }
+    const first = files[0];
+    const folderName = (first.webkitRelativePath || "").split("/")[0] || "Đã chọn folder";
+    display.value = `${folderName} (${files.length} file)`;
+    const databaseName = document.getElementById("database-name");
+    if (!databaseName.value.trim()) {
+      databaseName.value = folderName.replace(/[^a-zA-Z0-9]+/g, "_").toLowerCase();
+    }
+  });
+
+  function toggleGammaCustom() {
+    const mode = document.getElementById("train-gamma-mode").value;
+    document.getElementById("train-gamma-custom").style.display = mode === "custom" ? "block" : "none";
+  }
+
   let currentJobId = null;
   let pollInterval = null;
 
-  document.querySelectorAll(".model-tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      document.querySelectorAll(".model-tab").forEach((item) => item.classList.remove("active"));
-      document.querySelectorAll(".form-section").forEach((item) => item.classList.remove("active"));
-      tab.classList.add("active");
-      document.getElementById(tab.dataset.target).classList.add("active");
-    });
-  });
-
-  function updateBundleHint() {
-    const select = document.getElementById("train-bundle-relative");
-    const hint = document.getElementById("bundle-hint");
-    const option = select.options[select.selectedIndex];
-    hint.textContent = option?.dataset?.hint || "Hãy build database trước.";
-  }
-
-  function startBuild(jobType) {
-    const payload = { job_type: jobType };
-
-    if (jobType === "build_database") {
-      payload.source_dir = document.getElementById("db-source-dir").value.trim();
-      payload.database_name = document.getElementById("db-name").value.trim();
-      payload.min_images_per_person = document.getElementById("db-min-images").value;
-      payload.max_images_per_person = document.getElementById("db-max-images").value;
-      payload.test_size = document.getElementById("db-test-size").value;
-      payload.face_detection = document.getElementById("db-face-detection").value;
-    } else {
-      payload.bundle_relative = document.getElementById("train-bundle-relative").value;
-      payload.model_type = document.getElementById("train-model-type").value;
-      payload.n_components = document.getElementById("train-n-components").value;
-      payload.k = document.getElementById("train-k").value;
-      payload.metric = document.getElementById("train-metric").value;
-      payload.C = document.getElementById("train-c").value;
-      payload.kernel = document.getElementById("train-kernel").value;
-      payload.gamma = document.getElementById("train-gamma").value;
-      payload.output_name = document.getElementById("train-output-name").value.trim();
+  function startBuild() {
+    const files = Array.from(sourceFolderInput.files || []);
+    if (!files.length) {
+      alert("Vui lòng chọn folder nguồn.");
+      return;
     }
+    const gammaMode = document.getElementById("train-gamma-mode").value;
+    const gammaValue = gammaMode === "custom" ? document.getElementById("train-gamma-custom").value.trim() : gammaMode;
+    if (!document.getElementById("database-name").value.trim()) {
+      alert("Vui lòng nhập tên database.");
+      return;
+    }
+    if (gammaMode === "custom" && !gammaValue) {
+      alert("Vui lòng nhập giá trị cho SVM gamma.");
+      return;
+    }
+    const formData = new FormData();
+    formData.append("job_type", "build_and_train");
+    formData.append("database_name", document.getElementById("database-name").value.trim());
+    formData.append("model_scope", document.getElementById("model-scope").value);
+    formData.append("output_name", document.getElementById("output-name").value.trim());
+    formData.append("n_components", document.getElementById("train-n-components").value);
+    formData.append("k", document.getElementById("train-k").value);
+    formData.append("metric", document.getElementById("train-metric").value);
+    formData.append("C", document.getElementById("train-c").value);
+    formData.append("kernel", document.getElementById("train-kernel").value);
+    formData.append("gamma", gammaValue);
+    files.forEach((file) => {
+      formData.append("source_files", file, file.webkitRelativePath || file.name);
+    });
 
     fetch("/database-builder/build", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: formData,
     })
       .then((res) => res.json())
       .then((data) => {
@@ -493,6 +440,6 @@
       });
   }
 
-  updateBundleHint();
+  toggleGammaCustom();
 </script>
 {% endblock %}

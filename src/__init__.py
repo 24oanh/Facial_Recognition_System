@@ -8,6 +8,7 @@ from .process import (
     build_face_database_from_directory,
     create_model_inputs,
     get_dataset_processing_preset,
+    load_processed_dataset_bundle_for_preset,
     load_processed_dataset_bundle,
     process_all_face_datasets,
     process_extended_yale_b_dataset,
@@ -16,6 +17,8 @@ from .process import (
     process_lfw_dataset,
     process_lfw_many_people_few_images_dataset,
     process_orl_dataset,
+    prebuild_representative_face_datasets,
+    resolve_processed_dataset_bundle_dir,
     save_processed_dataset_bundle,
 )
 from .preprocessing import (
@@ -55,6 +58,7 @@ __all__ = [
     "detect_largest_face_bbox",
     "ensure_dataset_downloaded",
     "get_dataset_processing_preset",
+    "load_processed_dataset_bundle_for_preset",
     "load_processed_dataset_bundle",
     "load_and_split",
     "load_dataset",
@@ -68,7 +72,9 @@ __all__ = [
     "process_lfw_dataset",
     "process_lfw_many_people_few_images_dataset",
     "process_orl_dataset",
+    "prebuild_representative_face_datasets",
     "preprocess_batch",
     "preprocess_image",
+    "resolve_processed_dataset_bundle_dir",
     "save_processed_dataset_bundle",
 ]

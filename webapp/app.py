@@ -3,13 +3,14 @@ from __future__ import annotations
 import csv
 import json
 import os
+import shutil
 import sys
 import tempfile
 import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from time import perf_counter
 from typing import Any
 
@@ -31,6 +32,7 @@ STATICS = WEBAPP / "statics"
 TEMPLATES = WEBAPP / "templates"
 UPLOADS = STATICS / "uploads"
 TEMP = Path(tempfile.gettempdir()) / "math_for_ml_webapp"
+BUILDER_UPLOADS = TEMP / "builder_uploads"
 PROCESSED = ROOT / "data" / "processed"
 METRICS = ROOT / "results" / "metrics"
 MODELS = WEBAPP / "saved_models"
@@ -47,7 +49,7 @@ from src.process.dataset_processing import (
 
 app = Flask(__name__, template_folder=str(TEMPLATES), static_folder=str(STATICS), static_url_path="/static")
 app.secret_key = os.urandom(24)
-for folder in (UPLOADS, TEMP, METRICS, MODELS):
+for folder in (UPLOADS, TEMP, BUILDER_UPLOADS, METRICS, MODELS):
     folder.mkdir(parents=True, exist_ok=True)
 
 DATASET_ORDER = ["orl", "extended_yale_b", "lfw", "custom"]
@@ -62,6 +64,8 @@ MODEL_LABELS = {"pca_knn": "PCA + KNN", "pca_svm": "PCA + SVM"}
 DOWNLOAD_ROOTS = {"processed": PROCESSED, "metrics": METRICS, "saved-models": MODELS}
 ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".pgm"}
 MODEL_CACHE: dict[str, tuple[float, Any]] = {}
+UPLOAD_FACE_DETECTOR = "mtcnn"
+REALTIME_FACE_DETECTOR = "haar"
 
 camera = None
 camera_lock = threading.Lock()
@@ -160,6 +164,46 @@ def _save_upload(file: FileStorage) -> tuple[Path, str]:
     out_path = UPLOADS / out_name
     file.save(out_path)
     return out_path, out_name
+
+
+def _sanitize_uploaded_relative_path(filename: str) -> Path:
+    normalized = filename.replace("\\", "/")
+    parts = [secure_filename(part) for part in PurePosixPath(normalized).parts if part not in {"", ".", ".."}]
+    parts = [part for part in parts if part]
+    if len(parts) < 3:
+        raise ValueError("Folder upload phai theo cau truc root_folder/person_name/image.ext")
+    return Path(*parts)
+
+
+def _save_uploaded_source_folder(files: list[FileStorage]) -> tuple[Path, str]:
+    if not files:
+        raise ValueError("Vui long chon mot folder nguon.")
+    temp_root = BUILDER_UPLOADS / uuid.uuid4().hex
+    temp_root.mkdir(parents=True, exist_ok=True)
+    folder_name = ""
+    saved_count = 0
+    try:
+        for storage in files:
+            relative_path = _sanitize_uploaded_relative_path(storage.filename or "")
+            if not folder_name:
+                folder_name = relative_path.parts[0]
+            nested_path = Path(*relative_path.parts[1:])
+            destination = temp_root / nested_path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            storage.save(destination)
+            saved_count += 1
+        if saved_count == 0:
+            raise ValueError("Folder da chon khong co file anh hop le.")
+        return temp_root, folder_name or temp_root.name
+    except Exception:
+        shutil.rmtree(temp_root, ignore_errors=True)
+        raise
+
+
+def _cleanup_payload_source_dir(payload: dict[str, Any]) -> None:
+    cleanup_source_dir = str(payload.get("cleanup_source_dir", "")).strip()
+    if cleanup_source_dir:
+        shutil.rmtree(cleanup_source_dir, ignore_errors=True)
 
 
 def _infer_preset(summary: dict[str, Any]) -> str:
@@ -327,13 +371,18 @@ def _cached_model(path: Path) -> Any:
     return model
 
 
-def _preprocess(image_src: str | Path | Image.Image | np.ndarray, profile: dict[str, Any]) -> np.ndarray:
+def _preprocess(
+    image_src: str | Path | Image.Image | np.ndarray,
+    profile: dict[str, Any],
+    face_detection_override: str | None = None,
+) -> np.ndarray:
     summary = profile["summary"]
+    face_detection = face_detection_override if face_detection_override is not None else summary.get("face_detection")
     kwargs = {
         "image_size": tuple(summary.get("image_size", list(IMAGE_SIZE))),
         "normalize": bool(summary.get("normalize", True)),
         "flatten": bool(summary.get("flatten", True)),
-        "face_detection": summary.get("face_detection"),
+        "face_detection": face_detection,
         "face_padding_ratio": float(summary.get("face_padding_ratio", 0.25)),
         "face_crop_fallback": summary.get("face_crop_fallback", "original"),
         "face_square_crop": bool(summary.get("face_square_crop", True)),
@@ -351,8 +400,16 @@ def _preprocess(image_src: str | Path | Image.Image | np.ndarray, profile: dict[
     try:
         arr = preprocess_image(pil, **kwargs)
     except Exception:
-        kwargs["face_detection"] = None
-        arr = preprocess_image(pil, **kwargs)
+        if face_detection_override is not None and face_detection_override != summary.get("face_detection"):
+            kwargs["face_detection"] = summary.get("face_detection")
+            try:
+                arr = preprocess_image(pil, **kwargs)
+            except Exception:
+                kwargs["face_detection"] = None
+                arr = preprocess_image(pil, **kwargs)
+        else:
+            kwargs["face_detection"] = None
+            arr = preprocess_image(pil, **kwargs)
     arr = np.asarray(arr, dtype=np.float64)
     return np.expand_dims(arr, axis=0) if arr.ndim == 1 else arr
 
@@ -426,33 +483,43 @@ def _predict_svm(profile: dict[str, Any], model: Any, X: np.ndarray) -> dict[str
     }
 
 
-def predict(profile: dict[str, Any], model_key: str, image_src: str | Path | Image.Image | np.ndarray) -> dict[str, Any]:
+def predict(
+    profile: dict[str, Any],
+    model_key: str,
+    image_src: str | Path | Image.Image | np.ndarray,
+    face_detection_override: str | None = None,
+) -> dict[str, Any]:
     entry = profile["models"].get(model_key)
     if entry is None:
         return {"status": "error", "identity": "Model khong ton tai", "confidence": 0.0, "time_ms": 0.0}
     start = perf_counter()
-    X = _preprocess(image_src, profile)
+    X = _preprocess(image_src, profile, face_detection_override=face_detection_override)
     model = _cached_model(entry["path"])
     data = _predict_knn(profile, model, X) if model_key == "pca_knn" else _predict_svm(profile, model, X)
     data.update({"status": "success", "model_label": MODEL_LABELS[model_key], "time_ms": round((perf_counter() - start) * 1000, 2)})
     return data
 
 
-def compare_models(profile: dict[str, Any], image_src: str | Path | Image.Image | np.ndarray) -> dict[str, Any]:
+def compare_models(
+    profile: dict[str, Any],
+    image_src: str | Path | Image.Image | np.ndarray,
+    face_detection_override: str | None = None,
+) -> dict[str, Any]:
     out = {}
     for model_key in ("pca_knn", "pca_svm"):
-        out[model_key] = predict(profile, model_key, image_src)
+        out[model_key] = predict(profile, model_key, image_src, face_detection_override=face_detection_override)
         out[model_key]["ok"] = out[model_key]["status"] == "success"
     return out
 
 
 def _bbox(profile: dict[str, Any], image: np.ndarray) -> list[int] | None:
-    detector = profile["summary"].get("face_detection") or "haar"
+    detector = REALTIME_FACE_DETECTOR
     try:
         box = detect_largest_face_bbox(image, detector=detector)
     except Exception:
         try:
-            box = detect_largest_face_bbox(image, detector="haar")
+            fallback = profile["summary"].get("face_detection") or REALTIME_FACE_DETECTOR
+            box = detect_largest_face_bbox(image, detector=fallback)
         except Exception:
             box = None
     if box is None:
@@ -484,17 +551,28 @@ def release_camera() -> None:
 
 
 def recognize_frame(frame: np.ndarray) -> None:
-    global realtime_processing, realtime_result
+    global realtime_processing, realtime_profile_key, realtime_result
     if realtime_processing:
         return
     realtime_processing = True
     try:
         _, lookup = get_profiles()
         profile = lookup.get(realtime_profile_key)
+        if profile is None and lookup:
+            realtime_profile_key = next(iter(lookup))
+            profile = lookup.get(realtime_profile_key)
         if profile is None:
+            realtime_result = {
+                "identity": None,
+                "confidence": 0.0,
+                "bbox": None,
+                "status": "idle",
+                "model_label": MODEL_LABELS.get(realtime_model_key, realtime_model_key),
+                "profile_title": "",
+            }
             return
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) if cv2 is not None else frame
-        pred = predict(profile, realtime_model_key, rgb)
+        pred = predict(profile, realtime_model_key, rgb, face_detection_override=REALTIME_FACE_DETECTOR)
         realtime_result = {
             "identity": pred.get("identity"),
             "confidence": pred.get("confidence", 0.0),
@@ -577,35 +655,51 @@ def _write_model_meta(model_path: Path, bundle: dict[str, Any], model_type: str)
     _model_meta_path(model_path).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _selected_model_types(selection: str | None) -> list[str]:
+    key = _normalize_key(selection or "both")
+    if key in {"both", "all", "compare"}:
+        return ["pca_knn", "pca_svm"]
+    if key in MODEL_LABELS:
+        return [key]
+    raise ValueError("Lua chon model khong hop le.")
+
+
+def _model_output_path(bundle: dict[str, Any], model_type: str, output_name: str | None) -> Path:
+    base_name = Path(str(output_name or "").strip()).stem
+    safe_base = secure_filename(base_name).replace("-", "_")
+    if not safe_base:
+        safe_base = f"{bundle['preset_key']}_{time.strftime('%Y%m%d_%H%M%S')}"
+    return MODELS / f"{model_type}_{safe_base}.joblib"
+
+
 def _job_output(job: BuildJob, category: str, path: Path, label: str) -> None:
     job.outputs.append({"label": label, "relative_path": _proj(path), "category": category, "filename": _rel(path, DOWNLOAD_ROOTS[category])})
 
 
-def _run_build_database(job: BuildJob, payload: dict[str, Any]) -> None:
-    face_detection = payload.get("face_detection")
-    detector = "mtcnn" if face_detection == "auto" else None if face_detection == "none" else face_detection
-    min_images = int(payload.get("min_images_per_person", 2))
-    max_images_raw = str(payload.get("max_images_per_person", "")).strip()
-    max_images = int(max_images_raw) if max_images_raw else None
-    test_size = float(payload.get("test_size", 0.0))
-
+def _run_build_and_train(job: BuildJob, payload: dict[str, Any]) -> None:
     job.status = "running"
-    job.progress = 10
+    job.progress = 5
     job.log("Dang doc thu muc nguon va kiem tra cau truc folder.")
     bundle = build_face_database_from_directory(
         source_dir=payload["source_dir"],
         database_name=payload.get("database_name") or Path(payload["source_dir"]).name,
+        source_label=str(payload.get("source_label") or payload.get("database_name") or Path(payload["source_dir"]).name),
         output_root=PROCESSED,
-        min_images_per_subject=min_images,
-        max_images_per_subject=max_images,
-        test_size=test_size,
-        face_detection=detector,
-        face_crop_fallback="skip" if detector else "original",
-        min_face_area_ratio=0.08 if detector else 0.0,
+        face_detection="mtcnn",
+        face_crop_fallback="original",
+        min_face_area_ratio=0.0,
     )
     out = Path(bundle["output_dir"])
     summary = bundle["summary"]
-    job.progress = 80
+    bundle_meta = {
+        "bundle_dir": out,
+        "bundle_relative": _proj(out),
+        "dataset_key": "custom",
+        "preset_key": str(summary.get("profile_slug") or out.name),
+        "profile_key": f"custom__{summary.get('profile_slug') or out.name}",
+        "title": str(summary.get("profile_title") or out.name),
+    }
+    job.progress = 35
     job.log(
         f"Da tao database '{summary.get('profile_title', out.name)}' voi "
         f"{summary.get('classes_total', 0)} nguoi / {summary.get('samples_total', 0)} anh."
@@ -614,63 +708,51 @@ def _run_build_database(job: BuildJob, payload: dict[str, Any]) -> None:
         ("summary.json", "Summary"),
         ("inputs.npz", "Inputs"),
         ("manifest.csv", "Manifest"),
-        ("manifest_train.csv", "Manifest train"),
-        ("manifest_test.csv", "Manifest test"),
         ("label_mapping.json", "Label mapping"),
     ]:
         path = out / name
         if path.exists():
             _job_output(job, "processed", path, label)
-    job.progress = 100
-    job.status = "completed"
-    job.log("Hoan tat build database tu thu muc folder ten nguoi.")
-
-
-def _run_train(job: BuildJob, payload: dict[str, Any]) -> None:
-    job.status = "running"
-    job.progress = 10
-    bundle = _get_bundle_by_relative(str(payload.get("bundle_relative", "")))
-    if bundle is None:
-        raise ValueError("Khong tim thay database da chon.")
-    bundle_dir = bundle["bundle_dir"]
-    job.log(f"Dang nap database: {bundle['title']}.")
-    data = load_processed_dataset_bundle(bundle_dir)
-    X_train = np.asarray(data["X_train"] if len(data["X_train"]) else data["X"], dtype=np.float64)
-    y_train = np.asarray(data["y_train"] if len(data["y_train"]) else data["y"])
-    X_test = np.asarray(data["X_test"], dtype=np.float64)
-    y_test = np.asarray(data["y_test"])
-    eval_split = "test"
-    if X_test.size == 0 or y_test.size == 0:
-        X_test = X_train
-        y_test = y_train
-        eval_split = "train"
-        job.log("Khong co test split. Metrics se duoc tinh tren tap train/deployment.")
+    data = load_processed_dataset_bundle(out)
+    X_train = np.asarray(data["X"], dtype=np.float64)
+    y_train = np.asarray(data["y"])
     n_components = int(payload.get("n_components", 20))
-    model_type = payload["model_type"]
-    job.progress = 40
-    if model_type == "pca_knn":
-        model = train_pca_knn(X_train, y_train, n_components=n_components, k=int(payload.get("k", 3)), metric=payload.get("metric", "euclidean"))
-    else:
-        model = train_pca_svm(X_train, y_train, n_components=n_components, C=float(payload.get("C", 1.0)), kernel=payload.get("kernel", "linear"), gamma=payload.get("gamma", "scale"))
-    job.progress = 75
-    evaluation = model.evaluate(X_test, y_test)
-    stem = secure_filename(payload.get("output_name") or f"{model_type}_{bundle['dataset_key']}_{bundle['preset_key']}_{time.strftime('%Y%m%d_%H%M%S')}")
-    if not stem.endswith(".joblib"):
-        stem += ".joblib"
-    model_path = MODELS / stem
-    model.save(model_path)
-    _write_model_meta(model_path, bundle, model_type)
-    metrics_path = METRICS / f"{Path(stem).stem}_metrics.csv"
-    _write_metrics(metrics_path, MODEL_LABELS[model_type], evaluation)
-    _job_output(job, "saved-models", model_path, "Model")
-    meta_path = _model_meta_path(model_path)
-    if meta_path.exists():
-        _job_output(job, "saved-models", meta_path, "Model metadata")
-    _job_output(job, "metrics", metrics_path, "Metrics")
-    _job_output(job, "processed", bundle_dir / "summary.json", "Bundle summary")
+    model_types = _selected_model_types(payload.get("model_scope"))
+    total_models = len(model_types)
+
+    for index, model_type in enumerate(model_types, start=1):
+        progress_base = 35 + int(((index - 1) / total_models) * 55)
+        job.progress = progress_base
+        job.log(f"Dang train {MODEL_LABELS[model_type]} tren toan bo database deploy.")
+        if model_type == "pca_knn":
+            model = train_pca_knn(
+                X_train,
+                y_train,
+                n_components=n_components,
+                k=int(payload.get("k", 3)),
+                metric=payload.get("metric", "euclidean"),
+            )
+        else:
+            model = train_pca_svm(
+                X_train,
+                y_train,
+                n_components=n_components,
+                C=float(payload.get("C", 1.0)),
+                kernel=payload.get("kernel", "linear"),
+                gamma=payload.get("gamma", "scale"),
+            )
+        model_path = _model_output_path(bundle_meta, model_type, payload.get("output_name"))
+        model.save(model_path)
+        _write_model_meta(model_path, bundle_meta, model_type)
+        _job_output(job, "saved-models", model_path, "Model")
+        meta_path = _model_meta_path(model_path)
+        if meta_path.exists():
+            _job_output(job, "saved-models", meta_path, "Model metadata")
+        job.log(f"Da luu {MODEL_LABELS[model_type]}: {_proj(model_path)}")
+
     job.progress = 100
     job.status = "completed"
-    job.log(f"Hoan tat train. Accuracy={evaluation.get('accuracy', 0.0) * 100:.2f}% ({eval_split} split).")
+    job.log("Hoan tat build database va train model cho muc dich demo nhan dien truc tiep.")
 
 
 def _start_job(job_type: str, payload: dict[str, Any]) -> BuildJob:
@@ -679,14 +761,15 @@ def _start_job(job_type: str, payload: dict[str, Any]) -> BuildJob:
 
     def runner() -> None:
         try:
-            if job_type == "build_database":
-                _run_build_database(job, payload)
-            else:
-                _run_train(job, payload)
+            _run_build_and_train(job, payload)
         except Exception as exc:
             job.status = "failed"
             job.error = str(exc)
             job.log(f"That bai: {exc}")
+        finally:
+            cleanup_source_dir = str(payload.get("cleanup_source_dir", "")).strip()
+            if cleanup_source_dir:
+                shutil.rmtree(cleanup_source_dir, ignore_errors=True)
 
     threading.Thread(target=runner, daemon=True).start()
     return job
@@ -728,7 +811,7 @@ def home():
         else:
             image_path, image_name = _save_upload(image)
             try:
-                result = compare_models(profile, image_path)
+                result = compare_models(profile, image_path, face_detection_override=UPLOAD_FACE_DETECTOR)
             except Exception as exc:
                 error_message = str(exc)
     ctx.update({"selected_profile_key": selected, "selected_profile": profile, "result": result, "image_name": image_name, "error_message": error_message})
@@ -782,7 +865,7 @@ def batch_redirect():
 def realtime():
     global realtime_profile_key
     ctx = _base_context("realtime", "Realtime")
-    if not realtime_profile_key:
+    if not realtime_profile_key or realtime_profile_key not in ctx["profile_lookup"]:
         realtime_profile_key = ctx["selected_profile_key"]
     ctx.update({"selected_profile_key": realtime_profile_key or ctx["selected_profile_key"], "realtime_model_key": realtime_model_key})
     return render_template("realtime.html", **ctx)
@@ -834,53 +917,46 @@ def set_realtime_profile():
 @app.route("/database-builder")
 def database_builder():
     ctx = _base_context("database_builder", "Database Builder")
-    ctx.update(
-        {
-            "bundle_options": [
-                {
-                    "value": bundle["bundle_relative"],
-                    "label": bundle["title"],
-                    "hint": bundle["bundle_relative"],
-                }
-                for bundle in get_processed_bundles()
-            ],
-        }
-    )
     return render_template("database_builder.html", **ctx)
 
 
 @app.route("/database-builder/build", methods=["POST"])
 def build_database():
-    data = request.get_json(silent=True) or {}
-    job_type = data.get("job_type")
-    if job_type not in {"build_database", "train_model"}:
-        return jsonify({"error": "Loai job khong hop le"}), 400
-    if job_type == "build_database":
-        source_dir = str(data.get("source_dir", "")).strip()
-        database_name = str(data.get("database_name", "")).strip()
-        if not source_dir:
-            return jsonify({"error": "Vui long nhap thu muc nguon"}), 400
-        if not database_name:
-            return jsonify({"error": "Vui long nhap ten database"}), 400
+    if request.files:
+        files = [file for file in request.files.getlist("source_files") if file and file.filename]
+        data = request.form.to_dict(flat=True)
         try:
-            min_images = int(data.get("min_images_per_person", 2))
-            max_images_raw = str(data.get("max_images_per_person", "")).strip()
-            max_images = int(max_images_raw) if max_images_raw else None
-            test_size = float(data.get("test_size", 0.0))
-        except (TypeError, ValueError):
-            return jsonify({"error": "Thong so build database khong hop le"}), 400
-        if min_images < 1:
-            return jsonify({"error": "So anh toi thieu moi nguoi phai >= 1"}), 400
-        if max_images is not None and max_images < min_images:
-            return jsonify({"error": "So anh toi da phai >= so anh toi thieu"}), 400
-        if test_size < 0 or test_size >= 1:
-            return jsonify({"error": "Ty le test phai nam trong [0, 1)"}), 400
+            source_dir, source_label = _save_uploaded_source_folder(files)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        data["source_dir"] = str(source_dir)
+        data["source_label"] = source_label
+        data["cleanup_source_dir"] = str(source_dir)
     else:
-        bundle_relative = str(data.get("bundle_relative", "")).strip()
-        if _get_bundle_by_relative(bundle_relative) is None:
-            return jsonify({"error": "Database duoc chon khong hop le"}), 400
-        if data.get("model_type") not in MODEL_LABELS:
-            return jsonify({"error": "Model khong hop le"}), 400
+        data = request.get_json(silent=True) or {}
+    job_type = data.get("job_type")
+    if job_type != "build_and_train":
+        _cleanup_payload_source_dir(data)
+        return jsonify({"error": "Loai job khong hop le"}), 400
+    source_dir = str(data.get("source_dir", "")).strip()
+    database_name = str(data.get("database_name", "")).strip()
+    if not source_dir:
+        _cleanup_payload_source_dir(data)
+        return jsonify({"error": "Vui long nhap thu muc nguon"}), 400
+    if not database_name:
+        _cleanup_payload_source_dir(data)
+        return jsonify({"error": "Vui long nhap ten database"}), 400
+    try:
+        _selected_model_types(data.get("model_scope"))
+        int(data.get("n_components", 20))
+        int(data.get("k", 3))
+        float(data.get("C", 1.0))
+    except (TypeError, ValueError):
+        _cleanup_payload_source_dir(data)
+        return jsonify({"error": "Thong so train model khong hop le"}), 400
+    if str(data.get("kernel", "linear")) not in {"linear", "rbf", "poly"}:
+        _cleanup_payload_source_dir(data)
+        return jsonify({"error": "SVM kernel khong hop le"}), 400
     job = _start_job(job_type, data)
     return jsonify({"status": "success", "job_id": job.id})
 
