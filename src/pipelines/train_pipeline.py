@@ -1,10 +1,36 @@
-# Pipeline huấn luyện
-# Toàn bộ quy trình: tải dữ liệu -> tiền xử lý -> PCA -> huấn luyện mô hình
-#
-# Cách dùng:
-#   train_pca_knn(X_train, y_train, n_components, k)              -> (pca, knn) đã fit
-#   train_pca_svm(X_train, y_train, n_components, C, kernel, gamma) -> (pca, svm) đã fit
-#
-# Lưu:
-#   - Mô hình đã huấn luyện vào results/metrics/
-#   - Log các chỉ số trong quá trình huấn luyện
+from __future__ import annotations
+
+import numpy as np
+
+from .pca_knn import PCAKNNPipeline
+from .pca_svm import PCASVMPipeline
+
+
+def train_pca_knn(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    n_components: int,
+    k: int = 5,
+    metric: str = "euclidean",
+) -> PCAKNNPipeline:
+    pipeline = PCAKNNPipeline(n_components=n_components, k=k, metric=metric)
+    return pipeline.fit(X_train, y_train)
+
+
+def train_pca_svm(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    n_components: int,
+    C: float = 1.0,
+    kernel: str = "rbf",
+    gamma: str | float = "scale",
+    degree: int = 3,
+) -> PCASVMPipeline:
+    pipeline = PCASVMPipeline(
+        n_components=n_components,
+        C=C,
+        kernel=kernel,
+        gamma=gamma,
+        degree=degree,
+    )
+    return pipeline.fit(X_train, y_train)

@@ -1,11 +1,4 @@
-"""
-metrics.py
-----------
-Tính toán và tổng hợp các chỉ số đánh giá mô hình.
-"""
-
 import json
-import numpy as np
 import pandas as pd
 from pathlib import Path
 
@@ -52,6 +45,15 @@ def compare_models(*eval_tuples) -> pd.DataFrame:
 
 
 def save_metrics(df: pd.DataFrame, path: str = "results/metrics/comparison.csv"):
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(path)
-    print(f"[metrics] Đã lưu: {path}")
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_path.suffix.lower() == ".json":
+        output_path.write_text(
+            json.dumps(df.reset_index().to_dict(orient="records"), indent=2),
+            encoding="utf-8",
+        )
+    else:
+        df.to_csv(output_path)
+
+    print(f"[metrics] Đã lưu: {output_path}")

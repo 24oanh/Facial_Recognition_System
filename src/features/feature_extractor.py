@@ -1,14 +1,37 @@
-# Trích xuất đặc trưng
-# Bọc PCA để tạo ra embedding chiều thấp từ ảnh khuôn mặt
-#
-# Pipeline:
-#   ảnh thô -> làm phẳng -> chuẩn hóa -> chiếu PCA -> vector embedding
-#
-# Giao diện:
-#   fit(X_train)     -> tính eigenfaces trên tập huấn luyện
-#   transform(X)     -> chiếu X lên top-k eigenfaces
-#   fit_transform(X) -> fit rồi transform
-#
-# Xử lý thêm:
-#   - Chọn k tối ưu (ngưỡng phương sai giải thích, ví dụ 95%)
-#   - Lưu khuôn mặt trung bình để trừ mean
+from __future__ import annotations
+
+import numpy as np
+
+from .pca import PCAScratch
+
+
+class PCAFeatureExtractor:
+    """Thin wrapper around PCA used as a feature extractor."""
+
+    def __init__(self, n_components: int):
+        self.pca = PCAScratch(n_components=n_components)
+
+    @property
+    def components_(self) -> np.ndarray | None:
+        return self.pca.components_
+
+    @property
+    def mean_(self) -> np.ndarray | None:
+        return self.pca.mean_
+
+    @property
+    def explained_variance_ratio_(self) -> np.ndarray | None:
+        return self.pca.explained_variance_ratio_
+
+    def fit(self, X: np.ndarray) -> "PCAFeatureExtractor":
+        self.pca.fit(X)
+        return self
+
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        return self.pca.transform(X)
+
+    def fit_transform(self, X: np.ndarray) -> np.ndarray:
+        return self.pca.fit_transform(X)
+
+
+FeatureExtractor = PCAFeatureExtractor

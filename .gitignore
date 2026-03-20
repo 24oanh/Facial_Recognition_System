@@ -19,6 +19,8 @@ venv/
 results/figures/*
 !results/figures/.gitkeep
 results/metrics/*.pkl
+results/metrics/*.csv
+results/metrics/*.json
 !results/metrics/.gitkeep
 
 # Webapp saved models
