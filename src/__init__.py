@@ -5,6 +5,7 @@ from .pipelines import evaluate_pipeline, train_pca_knn, train_pca_svm
 from .process import (
     PROCESSING_PRESETS,
     analyze_subject_count_thresholds,
+    build_face_database_from_directory,
     create_model_inputs,
     get_dataset_processing_preset,
     load_processed_dataset_bundle,
@@ -46,6 +47,7 @@ __all__ = [
     "evaluate_pipeline",
     "PROCESSING_PRESETS",
     "analyze_subject_count_thresholds",
+    "build_face_database_from_directory",
     "create_model_inputs",
     "download_extended_yale_b_raw",
     "download_lfw_raw",

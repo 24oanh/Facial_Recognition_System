@@ -1,0 +1,312 @@
+{% extends "base.html" %} {% block content %}
+<div class="card">
+  <h2>About dự án</h2>
+  <p class="subtitle">
+    Trang giới thiệu ngắn về web demo nhận dạng khuôn mặt của dự án hiện tại,
+    nhóm thực hiện và các model đang được dùng trong hệ thống.
+  </p>
+
+  <div class="about-stats">
+    <div class="about-stat">
+      <span class="about-stat-label">Dataset có sẵn</span>
+      <strong>{{ dataset_cards|length }}</strong>
+    </div>
+    <div class="about-stat">
+      <span class="about-stat-label">Profile đang dùng</span>
+      <strong>{{ profile_total }}</strong>
+    </div>
+    <div class="about-stat">
+      <span class="about-stat-label">Artifact model</span>
+      <strong>{{ artifact_total }}</strong>
+    </div>
+  </div>
+
+  <section class="about-section">
+    <div class="section-head">
+      <h3>Nhóm thực hiện</h3>
+      <p>Thông tin thành viên được trình bày theo layout giới thiệu dự án học phần.</p>
+    </div>
+    <div class="member-grid">
+      <article class="member-card">
+        <div class="member-badge">N</div>
+        <div class="member-body">
+          <div class="about-card-title">Nguyễn Thị Kim Oanh</div>
+          <div class="member-role">PCA + KNN · Dataset Processing</div>
+          <div class="member-id">MSSV: 23110372</div>
+        </div>
+      </article>
+
+      <article class="member-card">
+        <div class="member-badge">T</div>
+        <div class="member-body">
+          <div class="about-card-title">Trần Phúc Toàn</div>
+          <div class="member-role">PCA + SVM · WebApp</div>
+          <div class="member-id">MSSV: 23110344</div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="about-section">
+    <div class="section-head">
+      <h3>Thông tin học phần</h3>
+      <p>Khối thông tin tổng quan cho bài demo và bối cảnh triển khai.</p>
+    </div>
+    <div class="info-grid">
+      <div class="info-item">
+        <span class="info-label">Giảng viên hướng dẫn</span>
+        <strong>ThS. Đoàn Minh Trí</strong>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Môn học</span>
+        <strong>Math for Machine Learning</strong>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Học kỳ</span>
+        <strong>HK2 · Năm học 2025-2026</strong>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Trường</span>
+        <strong>Trường Đại học Công nghệ Kỹ thuật TP.HCM</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="about-section">
+    <div class="section-head">
+      <h3>Mô hình đang dùng</h3>
+      <p>Giao diện demo hiện so sánh và vận hành trực tiếp hai pipeline của dự án.</p>
+    </div>
+    <div class="about-grid about-grid-2">
+      {% for item in model_cards %}
+      <article class="about-card accent-card">
+        <div class="about-card-title">{{ item.label }}</div>
+        <p class="about-card-copy">{{ item.description }}</p>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="about-section">
+    <div class="section-head">
+      <h3>Profile đang sẵn sàng trên web</h3>
+      <p>Mỗi profile gắn với processed bundle và các model artifact tương ứng.</p>
+    </div>
+
+    {% if profiles %}
+    <div class="profile-list">
+      {% for profile in profiles %}
+      <article class="profile-item">
+        <div>
+          <div class="about-card-title">{{ profile.title }}</div>
+          <div class="profile-path">{{ profile.bundle_relative }}</div>
+        </div>
+        <div class="tag-list align-end">
+          {% for model in profile.models.values() %}
+          <span class="tag">{{ model.label }}</span>
+          {% endfor %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="result-box">Chưa tìm thấy profile hoặc model nào trong web demo hiện tại.</div>
+    {% endif %}
+  </section>
+</div>
+
+<style>
+  .about-section + .about-section {
+    margin-top: 32px;
+  }
+
+  .section-head {
+    margin-bottom: 18px;
+  }
+
+  .section-head h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .section-head p {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .about-stats,
+  .about-grid,
+  .member-grid,
+  .info-grid {
+    display: grid;
+    gap: 18px;
+  }
+
+  .about-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 32px;
+  }
+
+  .about-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .member-grid,
+  .info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .about-stat,
+  .about-card,
+  .member-card,
+  .info-item,
+  .profile-item {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: white;
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+
+  .about-stat {
+    padding: 18px 20px;
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.03) 0%, rgba(37, 99, 235, 0.07) 100%);
+  }
+
+  .about-stat-label,
+  .info-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+
+  .about-stat strong {
+    font-size: 30px;
+    line-height: 1;
+    color: var(--primary);
+  }
+
+  .about-card,
+  .info-item {
+    padding: 20px;
+  }
+
+  .accent-card {
+    background: rgba(37, 99, 235, 0.03);
+  }
+
+  .about-card-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .about-card-copy {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-top: 10px;
+  }
+
+  .member-card,
+  .profile-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 20px;
+  }
+
+  .member-badge {
+    flex: 0 0 52px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(37, 99, 235, 0.12);
+    color: var(--primary);
+    font-size: 24px;
+    font-weight: 800;
+  }
+
+  .member-body {
+    flex: 1;
+  }
+
+  .member-role {
+    margin-top: 8px;
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+
+  .member-id {
+    margin-top: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--primary);
+  }
+
+  .info-item strong {
+    font-size: 15px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .align-end {
+    justify-content: flex-end;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .profile-list {
+    display: grid;
+    gap: 14px;
+  }
+
+  .profile-path {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    word-break: break-word;
+  }
+
+  @media (max-width: 900px) {
+    .about-stats,
+    .about-grid-2,
+    .member-grid,
+    .info-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .member-card,
+    .profile-item {
+      flex-direction: column;
+    }
+
+    .align-end {
+      justify-content: flex-start;
+    }
+  }
+</style>
+{% endblock %}

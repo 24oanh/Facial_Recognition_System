@@ -1,6 +1,7 @@
 from .dataset_processing import PROCESSING_PRESETS
 from .dataset_processing import (
     analyze_subject_count_thresholds,
+    build_face_database_from_directory,
     create_model_inputs,
     get_dataset_processing_preset,
     load_processed_dataset_bundle,
@@ -17,6 +18,7 @@ from .dataset_processing import (
 __all__ = [
     "PROCESSING_PRESETS",
     "analyze_subject_count_thresholds",
+    "build_face_database_from_directory",
     "create_model_inputs",
     "get_dataset_processing_preset",
     "load_processed_dataset_bundle",

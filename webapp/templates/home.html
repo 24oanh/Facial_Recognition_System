@@ -1,641 +1,282 @@
 {% extends "base.html" %} {% block content %}
-<div class="card dashboard-card">
-  <div class="hero-grid">
-    <section class="hero-panel hero-copy">
-      <span class="eyebrow">Math for ML</span>
-      <h2>Dashboard so sanh PCA + KNN va PCA + SVM</h2>
-      <p class="subtitle">
-        Web app nay da duoc chuyen tu demo cu sang bo tong hop dung voi repo
-        hien tai: tap trung vao dataset, processed bundle, metrics va saved
-        models cua du an.
-      </p>
+<div class="card">
+  <h2>Nhận dạng khuôn mặt</h2>
+  <p class="subtitle">
+    Upload ảnh để so sánh kết quả giữa `PCA + KNN` và `PCA + SVM` trên profile
+    đã train trong dự án hiện tại.
+  </p>
 
-      <div class="goal-list">
-        {% for goal in project_goals %}
-        <div class="goal-item">{{ goal }}</div>
-        {% endfor %}
-      </div>
-    </section>
-
-    <section class="hero-panel hero-summary">
-      <div class="summary-pill">Best accuracy hien co</div>
-      <div class="summary-score">{{ snapshot.best_accuracy_label }}</div>
-      <div class="summary-text">
-        {{ snapshot.best_accuracy_model }} tren {{ snapshot.best_accuracy_dataset
-        }}
-      </div>
-
-      <div class="snapshot-grid">
-        <div class="snapshot-tile">
-          <span class="snapshot-label">Datasets</span>
-          <strong>{{ snapshot.dataset_count }}</strong>
-        </div>
-        <div class="snapshot-tile">
-          <span class="snapshot-label">Processed bundles</span>
-          <strong>{{ snapshot.processed_bundle_count }}</strong>
-        </div>
-        <div class="snapshot-tile">
-          <span class="snapshot-label">Saved models</span>
-          <strong>{{ snapshot.saved_model_count }}</strong>
-        </div>
-        <div class="snapshot-tile">
-          <span class="snapshot-label">Featured samples</span>
-          <strong>{{ snapshot.processed_sample_count }}</strong>
-        </div>
-      </div>
-    </section>
+  {% if error_message %}
+  <div class="result-box" style="border-left-color: var(--error); color: var(--error)">
+    {{ error_message }}
   </div>
+  {% endif %}
 
-  <section class="section-block">
-    <div class="section-header">
-      <div>
-        <h3>So sanh ket qua theo dataset</h3>
-        <p>
-          Accuracy va train time duoc doc truc tiep tu cac file CSV trong
-          `results/metrics`.
-        </p>
-      </div>
-    </div>
-
-    <div class="chart-grid">
-      <div class="result-box chart-card">
-        <div class="chart-title">Accuracy (%)</div>
-        <canvas id="accuracyChart" height="220"></canvas>
-      </div>
-      <div class="result-box chart-card">
-        <div class="chart-title">Train time (s)</div>
-        <canvas id="trainTimeChart" height="220"></canvas>
-      </div>
-    </div>
-  </section>
-
-  <section class="section-block">
-    <div class="section-header">
-      <div>
-        <h3>Ket qua noi bat</h3>
-        <p>
-          Moi card tong hop mot thuc nghiem so sanh giua hai pipeline tren mot
-          preset dataset.
-        </p>
-      </div>
-    </div>
-
-    <div class="experiment-grid">
-      {% for experiment in featured_experiments %}
-      <article class="result-box experiment-card">
-        <div class="experiment-head">
-          <div>
-            <div class="experiment-name">{{ experiment.title }}</div>
-            <div class="experiment-meta">
-              Cap nhat {{ experiment.modified_label }}
-            </div>
-          </div>
-          <div class="winner-badge">
-            {{ experiment.winner.model_label }} {% if experiment.accuracy_gap is
-            not none %}+{{ "%.2f"|format(experiment.accuracy_gap * 100) }}%
-            {% endif %}
-          </div>
-        </div>
-
-        <div class="metric-list">
-          {% for record in experiment.records %}
-          <div class="metric-row">
-            <div>
-              <div class="metric-model">{{ record.model_label }}</div>
-              <div class="metric-sub">
-                Precision {{ "%.2f"|format(record.precision * 100) }}% · Recall
-                {{ "%.2f"|format(record.recall * 100) }}%
-              </div>
-            </div>
-            <div class="metric-values">
-              <strong>{{ "%.2f"|format(record.accuracy * 100) }}%</strong>
-              <span>{{ "%.3f"|format(record.train_time) }} s</span>
-            </div>
-          </div>
+  <form method="POST" enctype="multipart/form-data" id="recognitionForm">
+    <div class="form-grid">
+      <div class="form-field">
+        <label>Profile model</label>
+        <select name="profile_key" class="demo-select">
+          {% for profile in profiles %}
+          <option
+            value="{{ profile.key }}"
+            {{ 'selected' if selected_profile_key == profile.key }}
+          >
+            {{ profile.title }}
+          </option>
           {% endfor %}
-        </div>
-      </article>
-      {% endfor %}
+        </select>
+      </div>
+      {% if selected_profile %}
+      <div class="form-field">
+        <label>Processed bundle</label>
+        <div class="field-note">{{ selected_profile.bundle_relative }}</div>
+      </div>
+      {% endif %}
     </div>
-  </section>
 
-  <section class="section-block">
-    <div class="section-header">
-      <div>
-        <h3>Hai pipeline chinh</h3>
-        <p>
-          Noi dung duoc doi cho phu hop voi du an nhung van giu nguyen visual
-          language cua web app.
+    {% if not image_name %}
+    <div class="upload-zone" id="uploadZone">
+      <div class="upload-zone-content">
+        <svg
+          style="width: 48px; height: 48px; color: var(--primary); margin-bottom: 12px"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+          ></path>
+        </svg>
+        <div style="font-weight: 600; font-size: 16px; margin-bottom: 6px">
+          Kéo thả ảnh vào đây hoặc
+        </div>
+        <label for="imageInput" class="upload-label">Chọn ảnh từ máy</label>
+        <input
+          type="file"
+          name="image"
+          accept="image/*,.pgm"
+          id="imageInput"
+          style="display: none"
+          onchange="submitWithLoading()"
+        />
+        <p style="font-size: 12px; color: var(--muted); margin-top: 8px">
+          Hỗ trợ: JPG, PNG, BMP, PGM
         </p>
       </div>
     </div>
-
-    <div class="pipeline-grid">
-      {% for model in model_cards %}
-      <article class="model-card {{ model.key }}">
-        <div class="pipeline-title-row">
-          <h4>{{ model.title }}</h4>
-          <span class="mini-pill {{ model.accent }}">{{ model.key|upper }}</span>
-        </div>
-        <p class="pipeline-summary">{{ model.summary }}</p>
-        <ul class="pipeline-points">
-          {% for detail in model.details %}
-          <li>{{ detail }}</li>
-          {% endfor %}
-        </ul>
-      </article>
-      {% endfor %}
-    </div>
-  </section>
-
-  <section class="section-block">
-    <div class="section-header">
-      <div>
-        <h3>Dataset duoc dua vao dashboard</h3>
-        <p>
-          Moi dataset duoc gan voi bundle uu tien de hien thi nhanh thong so va
-          ket qua.
-        </p>
+    {% else %}
+    <div style="display: flex; gap: 24px; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap">
+      <div class="preview-box-large">
+        <img
+          src="{{ url_for('static', filename='uploads/' + image_name) }}"
+          alt="Uploaded image"
+          style="width: 100%; height: 100%; object-fit: cover; border-radius: 12px"
+        />
       </div>
-    </div>
-
-    <div class="dataset-grid">
-      {% for item in dataset_overviews %}
-      <article class="result-box dataset-card">
-        <div class="dataset-top">
-          <div>
-            <div class="dataset-name">{{ item.dataset_label }}</div>
-            <p class="dataset-desc">{{ item.description }}</p>
-          </div>
-          {% if item.winner %}
-          <div class="dataset-chip">
-            {{ item.winner.model_label }} · {{ item.winner.accuracy|percent }}
-          </div>
+      <div style="flex: 1; min-width: 280px">
+        <div style="font-weight: 600; margin-bottom: 8px; color: var(--text)">
+          Ảnh đã chọn
+        </div>
+        <div style="font-size: 13px; color: var(--muted); margin-bottom: 16px">
+          {{ image_name }}
+        </div>
+        <div class="profile-box">
+          <div><b>Profile:</b> {{ selected_profile.title if selected_profile else 'N/A' }}</div>
+          {% if selected_profile %}
+          <div><b>Bundle:</b> {{ selected_profile.bundle_relative }}</div>
           {% endif %}
         </div>
-
-        <div class="dataset-stats">
-          <div>
-            <span>Raw</span>
-            <strong>{{ item.raw_subjects }} subjects / {{ item.raw_samples }} samples</strong>
-          </div>
-          <div>
-            <span>Featured bundle</span>
-            <strong>{{ item.samples_total }} samples / {{ item.classes_total }} classes</strong>
-          </div>
-          <div>
-            <span>Duong dan raw</span>
-            <strong>{{ item.raw_path }}</strong>
-          </div>
-          <div>
-            <span>Preset</span>
-            <strong>{{ item.featured_bundle.preset_label if item.featured_bundle else 'N/A' }}</strong>
-          </div>
+        <div style="margin-top: 16px">
+          <a class="btn-secondary" href="/">Thử ảnh khác</a>
         </div>
-      </article>
-      {% endfor %}
-    </div>
-  </section>
-
-  <section class="section-block">
-    <div class="section-header">
-      <div>
-        <h3>Lenh tai tao nhanh</h3>
-        <p>Lay truc tiep tu workflow hien tai cua repo de chay lai thi nghiem.</p>
       </div>
     </div>
+    {% endif %}
+  </form>
 
-    <div class="command-grid">
-      {% for item in repro_commands %}
-      <article class="result-box command-card">
-        <div class="command-title">{{ item.title }}</div>
-        <pre class="command-shell"><code>{{ item.command }}</code></pre>
-      </article>
-      {% endfor %}
+  {% if result %}
+  <div class="model-grid">
+    {% for key in ['pca_knn', 'pca_svm'] %}
+    {% set item = result[key] %}
+    <div class="model-card {{ key }}">
+      <div class="model-head">
+        <div>
+          <div class="model-title">{{ item.model_label }}</div>
+          <div class="model-sub">{{ selected_profile.title if selected_profile else '' }}</div>
+        </div>
+        <span class="status-pill {{ 'success-pill' if item.ok else 'error-pill' }}">
+          {{ 'Success' if item.ok else 'Error' }}
+        </span>
+      </div>
+
+      <table style="width: 100%; margin-top: 12px; font-size: 13px">
+        <tr>
+          <td style="color: var(--muted); padding: 4px 0">Danh tính</td>
+          <td style="text-align: right; font-weight: 600">{{ item.identity }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--muted); padding: 4px 0">Độ tin cậy</td>
+          <td style="text-align: right; color: var(--primary)">
+            {{ item.confidence|percent }}
+          </td>
+        </tr>
+        <tr>
+          <td style="color: var(--muted); padding: 4px 0">{{ item.score_label }}</td>
+          <td style="text-align: right">{{ "%.4f"|format(item.score) }}</td>
+        </tr>
+        <tr>
+          <td style="color: var(--muted); padding: 4px 0">Thời gian</td>
+          <td style="text-align: right; color: var(--success)">{{ item.time_ms }} ms</td>
+        </tr>
+      </table>
+
+      {% if item.top_k %}
+      <div class="topk-box">
+        <div class="topk-title">Top matches</div>
+        {% for row in item.top_k %}
+        <div class="topk-row">
+          <span>{{ row.identity }}</span>
+          <span>{{ row.confidence|percent }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
-  </section>
+    {% endfor %}
+  </div>
+  {% endif %}
 </div>
 
 <style>
-  .dashboard-card {
-    max-width: 1240px;
-  }
-
-  .hero-grid {
-    display: grid;
-    grid-template-columns: 1.2fr 0.8fr;
-    gap: 22px;
-    margin-bottom: 28px;
-  }
-
-  .hero-panel {
-    border-radius: 18px;
-    padding: 28px;
-    border: 1px solid var(--border);
-    background: white;
-  }
-
-  .hero-copy {
-    background: linear-gradient(
-      135deg,
-      rgba(37, 99, 235, 0.06) 0%,
-      rgba(37, 99, 235, 0.02) 100%
-    );
-  }
-
-  .hero-summary {
-    background: linear-gradient(
-      135deg,
-      rgba(16, 185, 129, 0.08) 0%,
-      rgba(37, 99, 235, 0.05) 100%
-    );
-  }
-
-  .eyebrow {
-    display: inline-flex;
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: rgba(37, 99, 235, 0.12);
-    color: var(--primary);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    margin-bottom: 16px;
-  }
-
-  .goal-list {
-    display: grid;
-    gap: 12px;
-    margin-top: 24px;
-  }
-
-  .goal-item {
-    padding: 14px 16px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.75);
-    border: 1px solid rgba(37, 99, 235, 0.1);
-    color: var(--text-secondary);
-    font-size: 14px;
-  }
-
-  .summary-pill {
-    display: inline-flex;
-    width: fit-content;
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: rgba(16, 185, 129, 0.14);
-    color: var(--success);
-    font-size: 12px;
-    font-weight: 700;
-    margin-bottom: 16px;
-  }
-
-  .summary-score {
-    font-size: 42px;
-    line-height: 1;
-    color: var(--text);
-    font-weight: 800;
-    margin-bottom: 10px;
-  }
-
-  .summary-text {
-    color: var(--text-secondary);
-    font-size: 14px;
-    margin-bottom: 20px;
-  }
-
-  .snapshot-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 14px;
-  }
-
-  .snapshot-tile {
-    padding: 16px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.88);
-    border: 1px solid rgba(15, 23, 42, 0.08);
-  }
-
-  .snapshot-label {
-    display: block;
-    font-size: 12px;
-    color: var(--muted);
-    margin-bottom: 6px;
-  }
-
-  .snapshot-tile strong {
-    font-size: 22px;
-    color: var(--text);
-  }
-
-  .section-block + .section-block {
-    margin-top: 34px;
-  }
-
-  .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: end;
-    gap: 16px;
-    margin-bottom: 18px;
-  }
-
-  .section-header h3 {
-    font-size: 20px;
-    color: var(--text);
-    margin-bottom: 4px;
-  }
-
-  .section-header p {
-    color: var(--muted);
-    font-size: 14px;
-  }
-
-  .chart-grid,
-  .pipeline-grid,
-  .command-grid {
+  .form-grid,
+  .model-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 18px;
   }
 
-  .chart-card {
-    margin-top: 0;
-    padding: 20px;
-  }
-
-  .chart-title {
-    font-size: 14px;
-    font-weight: 700;
+  .form-field label {
+    display: block;
+    font-weight: 600;
     color: var(--text);
-    margin-bottom: 14px;
+    margin-bottom: 8px;
   }
 
-  .experiment-grid,
-  .dataset-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 18px;
+  .demo-select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
   }
 
-  .experiment-card,
-  .dataset-card,
-  .command-card {
-    margin-top: 0;
-    padding: 20px;
+  .field-note,
+  .profile-box {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(37, 99, 235, 0.03);
+    color: var(--text-secondary);
+    font-size: 13px;
+    word-break: break-word;
   }
 
-  .experiment-head,
-  .dataset-top,
-  .pipeline-title-row {
+  .model-head {
     display: flex;
     justify-content: space-between;
-    gap: 14px;
+    gap: 12px;
     align-items: flex-start;
-    margin-bottom: 16px;
   }
 
-  .experiment-name,
-  .dataset-name,
-  .command-title,
-  .pipeline-title-row h4 {
+  .model-title {
     font-size: 16px;
     font-weight: 700;
     color: var(--text);
   }
 
-  .experiment-meta,
-  .dataset-desc,
-  .pipeline-summary {
-    font-size: 13px;
+  .model-sub {
+    font-size: 12px;
     color: var(--muted);
     margin-top: 4px;
   }
 
-  .winner-badge,
-  .dataset-chip,
-  .mini-pill {
+  .status-pill {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    padding: 6px 10px;
+    padding: 5px 10px;
     border-radius: 999px;
     font-size: 11px;
     font-weight: 700;
-    white-space: nowrap;
   }
 
-  .winner-badge,
-  .mini-pill.primary {
-    background: rgba(37, 99, 235, 0.12);
-    color: var(--primary);
-  }
-
-  .mini-pill.success,
-  .dataset-chip {
+  .success-pill {
     background: rgba(16, 185, 129, 0.14);
     color: var(--success);
   }
 
-  .metric-list {
-    display: grid;
-    gap: 12px;
+  .error-pill {
+    background: rgba(239, 68, 68, 0.14);
+    color: var(--error);
   }
 
-  .metric-row {
+  .topk-box {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .topk-title {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .topk-row {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
-    padding: 14px;
-    border-radius: 12px;
-    background: rgba(37, 99, 235, 0.03);
-    border: 1px solid rgba(37, 99, 235, 0.08);
-  }
-
-  .metric-model {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text);
-  }
-
-  .metric-sub {
     font-size: 12px;
-    color: var(--muted);
-    margin-top: 4px;
+    padding: 4px 0;
   }
 
-  .metric-values {
-    text-align: right;
-  }
-
-  .metric-values strong {
-    display: block;
-    font-size: 18px;
-    color: var(--primary);
-  }
-
-  .metric-values span {
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  .pipeline-points {
-    list-style: none;
-    padding: 0;
-    margin-top: 16px;
-    display: grid;
-    gap: 10px;
-  }
-
-  .pipeline-points li {
-    position: relative;
-    padding-left: 18px;
-    color: var(--text-secondary);
-    font-size: 13px;
-  }
-
-  .pipeline-points li::before {
-    content: "";
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--primary);
-    position: absolute;
-    left: 0;
-    top: 8px;
-  }
-
-  .dataset-stats {
-    display: grid;
-    gap: 12px;
-  }
-
-  .dataset-stats div {
-    padding: 14px;
-    border-radius: 12px;
-    background: rgba(15, 23, 42, 0.03);
-  }
-
-  .dataset-stats span {
-    display: block;
-    color: var(--muted);
-    font-size: 12px;
-    margin-bottom: 4px;
-  }
-
-  .dataset-stats strong {
-    color: var(--text);
-    font-size: 13px;
-    word-break: break-word;
-  }
-
-  .command-shell {
-    margin-top: 14px;
-    padding: 16px;
-    border-radius: 12px;
-    background: #0f172a;
-    color: #e2e8f0;
-    overflow-x: auto;
-    font-size: 12px;
-    line-height: 1.7;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  @media (max-width: 1080px) {
-    .hero-grid,
-    .chart-grid,
-    .pipeline-grid,
-    .command-grid,
-    .experiment-grid,
-    .dataset-grid {
+  @media (max-width: 900px) {
+    .form-grid,
+    .model-grid {
       grid-template-columns: 1fr;
     }
   }
 </style>
 
 <script>
-  const homeChart = {{ home_chart | tojson }};
+  const uploadZone = document.getElementById("uploadZone");
+  const imageInput = document.getElementById("imageInput");
+  const form = document.getElementById("recognitionForm");
 
-  new Chart(document.getElementById("accuracyChart"), {
-    type: "bar",
-    data: {
-      labels: homeChart.labels,
-      datasets: [
-        {
-          label: "PCA + KNN",
-          data: homeChart.knn_accuracy,
-          backgroundColor: "rgba(37, 99, 235, 0.85)",
-          borderRadius: 10,
-        },
-        {
-          label: "PCA + SVM",
-          data: homeChart.svm_accuracy,
-          backgroundColor: "rgba(16, 185, 129, 0.85)",
-          borderRadius: 10,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { position: "bottom" },
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          max: 100,
-          ticks: {
-            callback: (value) => value + "%",
-          },
-          grid: { color: "#e2e8f0" },
-        },
-        x: { grid: { display: false } },
-      },
-    },
-  });
+  function submitWithLoading() {
+    form.submit();
+  }
 
-  new Chart(document.getElementById("trainTimeChart"), {
-    type: "line",
-    data: {
-      labels: homeChart.labels,
-      datasets: [
-        {
-          label: "PCA + KNN",
-          data: homeChart.knn_train_time,
-          borderColor: "rgba(37, 99, 235, 1)",
-          backgroundColor: "rgba(37, 99, 235, 0.12)",
-          fill: true,
-          tension: 0.35,
-        },
-        {
-          label: "PCA + SVM",
-          data: homeChart.svm_train_time,
-          borderColor: "rgba(16, 185, 129, 1)",
-          backgroundColor: "rgba(16, 185, 129, 0.12)",
-          fill: true,
-          tension: 0.35,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { position: "bottom" },
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            callback: (value) => value + " s",
-          },
-          grid: { color: "#e2e8f0" },
-        },
-        x: { grid: { display: false } },
-      },
-    },
-  });
+  if (uploadZone && imageInput) {
+    uploadZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      uploadZone.classList.add("drag-over");
+    });
+    uploadZone.addEventListener("dragleave", () => {
+      uploadZone.classList.remove("drag-over");
+    });
+    uploadZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      uploadZone.classList.remove("drag-over");
+      const files = e.dataTransfer.files;
+      if (files.length) {
+        imageInput.files = files;
+        form.submit();
+      }
+    });
+  }
 </script>
 {% endblock %}

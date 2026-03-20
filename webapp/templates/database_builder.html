@@ -1,378 +1,498 @@
 {% extends "base.html" %} {% block content %}
-<div class="card artifact-card">
-  <div class="page-head">
-    <h2>Artifacts va models</h2>
-    <p class="subtitle">
-      Trang nay thay cho database builder cu. Toan bo noi dung duoc doi sang
-      file artifact thuc te cua repo: saved models, metrics CSV va cac lenh tai
-      tao.
-    </p>
+<div class="card">
+  <h2>Database Builder</h2>
+  <p class="subtitle">
+    Chức năng này dùng để tạo database nhận diện từ thư mục ảnh thực tế:
+    mỗi folder con là một người, tên folder chính là danh tính cần nhận diện.
+  </p>
+
+  <div class="builder-intro">
+    <div class="intro-card">
+      <div class="intro-title">Cấu trúc thư mục đầu vào</div>
+      <pre class="folder-structure">thu_muc_nguoi_moi/
+├── Nguyen_Van_A/
+│   ├── 01.jpg
+│   ├── 02.jpg
+│   └── 03.png
+├── Tran_Thi_B/
+│   ├── a.jpg
+│   └── b.jpg
+└── Le_Van_C/
+    ├── 1.png
+    └── 2.png</pre>
+    </div>
+    <div class="intro-card">
+      <div class="intro-title">Flow sử dụng</div>
+      <div class="intro-copy">
+        Bước 1: build database từ thư mục folder tên người.<br />
+        Bước 2: train model từ database vừa tạo hoặc từ bundle đã có.<br />
+        Bước 3: model mới sẽ xuất hiện ở trang nhận dạng và realtime.
+      </div>
+    </div>
   </div>
 
-  <div class="stats-strip">
-    <div class="stat-pill">
-      <span>Saved models</span>
-      <strong>{{ snapshot.saved_model_count }}</strong>
-    </div>
-    <div class="stat-pill">
-      <span>Metrics files</span>
-      <strong>{{ snapshot.metric_count }}</strong>
-    </div>
-    <div class="stat-pill">
-      <span>Best accuracy</span>
-      <strong>{{ snapshot.best_accuracy_label }}</strong>
-    </div>
+  <div class="model-tabs">
+    <button class="model-tab active" data-target="database-form">Build Database</button>
+    <button class="model-tab" data-target="train-form">Train Model</button>
   </div>
 
-  <section class="section-block">
-    <div class="section-header">
-      <div>
-        <h3>Saved models trong `webapp/saved_models`</h3>
-        <p>
-          Cac file `.joblib` duoc gan nhan theo model, dataset va preset de xem
-          nhanh artifact nao dang phuc vu notebook/demo.
-        </p>
-      </div>
-    </div>
-
-    <div class="model-grid">
-      {% for model in saved_models %}
-      <article class="result-box saved-card">
-        <div class="saved-head">
-          <div>
-            <div class="saved-name">{{ model.model_label }}</div>
-            <div class="saved-meta">
-              {{ model.dataset_label }} · {{ model.preset_label }}
-            </div>
-          </div>
-          <span class="saved-badge {{ model.accent }}">{{ model.accuracy|percent if model.accuracy is not none else 'No metric' }}</span>
+  <div class="form-section active" id="database-form">
+    <h3 class="section-title">Tạo database từ thư mục ảnh</h3>
+    <div class="form-row">
+      <div class="form-group form-group-wide">
+        <label>Thư mục nguồn</label>
+        <input type="text" id="db-source-dir" placeholder="D:\du_lieu\guest_faces" />
+        <div class="field-help">
+          Nhập đường dẫn trên chính máy đang chạy web app. Mỗi folder con là một người.
         </div>
+      </div>
+      <div class="form-group">
+        <label>Tên database</label>
+        <input type="text" id="db-name" placeholder="nguoi_moi_su_kien_2026" />
+      </div>
+    </div>
 
-        <div class="saved-body">
-          <div>
-            <span>File</span>
-            <strong>{{ model.file_name }}</strong>
-          </div>
-          <div>
-            <span>Relative path</span>
-            <strong>{{ model.relative_path }}</strong>
-          </div>
-          <div>
-            <span>Size</span>
-            <strong>{{ model.size_label }}</strong>
-          </div>
-          <div>
-            <span>Modified</span>
-            <strong>{{ model.modified_label }}</strong>
-          </div>
-          <div>
-            <span>Train time</span>
-            <strong>{{ "%.3f"|format(model.train_time) ~ ' s' if model.train_time is not none else 'N/A' }}</strong>
-          </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Số ảnh tối thiểu mỗi người</label>
+        <input type="number" id="db-min-images" value="2" min="1" />
+      </div>
+      <div class="form-group">
+        <label>Số ảnh tối đa mỗi người</label>
+        <input type="number" id="db-max-images" placeholder="Để trống nếu không giới hạn" min="1" />
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Tỷ lệ test / đánh giá</label>
+        <input type="number" id="db-test-size" value="0" min="0" max="0.9" step="0.05" />
+        <div class="field-help">Đặt `0` nếu muốn dùng toàn bộ ảnh cho database deploy.</div>
+      </div>
+      <div class="form-group">
+        <label>Face Detection</label>
+        <select id="db-face-detection">
+          <option value="auto">MTCNN mặc định</option>
+          <option value="none">Không dùng</option>
+          <option value="haar">Haar</option>
+          <option value="mtcnn">MTCNN</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn" onclick="startBuild('build_database')">Tạo database</button>
+  </div>
+
+  <div class="form-section" id="train-form">
+    <h3 class="section-title">Train model từ database đã có</h3>
+
+    <div class="form-row">
+      <div class="form-group form-group-wide">
+        <label>Database / processed bundle</label>
+        <select id="train-bundle-relative" onchange="updateBundleHint()">
+          {% if bundle_options %}
+          {% for item in bundle_options %}
+          <option value="{{ item.value }}" data-hint="{{ item.hint }}">{{ item.label }}</option>
+          {% endfor %}
+          {% else %}
+          <option value="">Chưa có database nào</option>
+          {% endif %}
+        </select>
+        <div class="field-help" id="bundle-hint">
+          {% if bundle_options %}{{ bundle_options[0].hint }}{% else %}Hãy build database trước.{% endif %}
         </div>
-
-        <a
-          class="download-link"
-          href="{{ url_for('download_artifact', category='saved-models', filename=model.download_name) }}"
-        >
-          Download model
-        </a>
-      </article>
-      {% endfor %}
-    </div>
-  </section>
-
-  <section class="section-block">
-    <div class="section-header">
-      <div>
-        <h3>Bang tong hop metrics</h3>
-        <p>
-          Muc nay doc truc tiep tu cac file CSV trong `results/metrics`, giu
-          dung ket qua notebook thay vi du lieu placeholder.
-        </p>
+      </div>
+      <div class="form-group">
+        <label>Model</label>
+        <select id="train-model-type">
+          <option value="pca_knn">PCA + KNN</option>
+          <option value="pca_svm">PCA + SVM</option>
+        </select>
       </div>
     </div>
 
-    <div class="result-box table-shell">
-      <table class="metrics-table">
-        <thead>
-          <tr>
-            <th>Experiment</th>
-            <th>Model</th>
-            <th>Accuracy</th>
-            <th>Precision</th>
-            <th>Recall</th>
-            <th>F1</th>
-            <th>Train time</th>
-            <th>CSV</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for experiment in experiments %}
-          {% for record in experiment.records %}
-          <tr>
-            <td>
-              <div class="table-main">{{ experiment.title }}</div>
-              <div class="table-sub">{{ experiment.relative_path }}</div>
-            </td>
-            <td>{{ record.model_label }}</td>
-            <td>{{ record.accuracy|percent }}</td>
-            <td>{{ record.precision|percent }}</td>
-            <td>{{ record.recall|percent }}</td>
-            <td>{{ record.f1_score|percent }}</td>
-            <td>{{ "%.3f"|format(record.train_time) }} s</td>
-            <td>
-              <a
-                class="table-link"
-                href="{{ url_for('download_artifact', category='metrics', filename=experiment.download_name) }}"
-              >
-                Download
-              </a>
-            </td>
-          </tr>
-          {% endfor %}
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="section-block">
-    <div class="section-header">
-      <div>
-        <h3>Lenh tai tao artifact</h3>
-        <p>
-          Day la nhung command nhanh de chay lai preprocessing va train baseline
-          trong cung repo.
-        </p>
+    <div class="form-row">
+      <div class="form-group">
+        <label>n_components</label>
+        <input type="number" id="train-n-components" value="20" min="2" />
+      </div>
+      <div class="form-group">
+        <label>Tên file output</label>
+        <input type="text" id="train-output-name" placeholder="pca_knn_custom_guest.joblib" />
       </div>
     </div>
 
-    <div class="command-grid">
-      {% for item in repro_commands %}
-      <article class="result-box command-card">
-        <div class="command-title">{{ item.title }}</div>
-        <pre class="command-shell"><code>{{ item.command }}</code></pre>
-      </article>
-      {% endfor %}
+    <div class="form-row">
+      <div class="form-group">
+        <label>KNN k</label>
+        <input type="number" id="train-k" value="3" min="1" />
+      </div>
+      <div class="form-group">
+        <label>KNN metric</label>
+        <select id="train-metric">
+          <option value="euclidean">euclidean</option>
+          <option value="cosine">cosine</option>
+          <option value="manhattan">manhattan</option>
+        </select>
+      </div>
     </div>
-  </section>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>SVM C</label>
+        <input type="number" id="train-c" value="1.0" step="0.1" min="0.1" />
+      </div>
+      <div class="form-group">
+        <label>SVM kernel</label>
+        <select id="train-kernel">
+          <option value="linear">linear</option>
+          <option value="rbf">rbf</option>
+          <option value="poly">poly</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>SVM gamma</label>
+        <input type="text" id="train-gamma" value="scale" />
+      </div>
+    </div>
+
+    <button class="btn" onclick="startBuild('train_model')" {% if not bundle_options %}disabled{% endif %}>
+      Bắt đầu Train
+    </button>
+  </div>
+
+  <div class="progress-section" id="progress-section">
+    <div class="result-box" style="margin-top: 28px">
+      <div class="progress-header">
+        <h3>Build Progress</h3>
+        <span class="progress-status" id="progress-status">Running</span>
+      </div>
+
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+      </div>
+
+      <div class="progress-message" id="progress-message">Đang khởi tạo...</div>
+
+      <h4 style="margin-top: 18px; margin-bottom: 8px">Logs</h4>
+      <div class="log-container" id="log-container">
+        <div class="log-line">Waiting for logs...</div>
+      </div>
+
+      <div id="output-section" style="margin-top: 18px; display: none">
+        <h4 style="margin-bottom: 8px">Artifacts</h4>
+        <div id="output-list" class="output-list"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <style>
-  .artifact-card {
-    max-width: 1260px;
-  }
-
-  .page-head {
-    margin-bottom: 24px;
-  }
-
-  .stats-strip {
+  .builder-intro,
+  .form-row {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr 1fr;
     gap: 16px;
   }
 
-  .stat-pill {
+  .builder-intro {
+    margin-bottom: 24px;
+  }
+
+  .intro-card,
+  .form-group input,
+  .form-group select {
+    border-radius: 12px;
+  }
+
+  .intro-card {
+    background: rgba(37, 99, 235, 0.03);
+    border: 1px solid rgba(37, 99, 235, 0.1);
     padding: 18px 20px;
-    border-radius: 16px;
-    background: white;
-    border: 1px solid var(--border);
-    box-shadow: 0 2px 8px var(--shadow);
   }
 
-  .stat-pill span {
-    display: block;
-    color: var(--muted);
-    font-size: 12px;
-    margin-bottom: 8px;
-  }
-
-  .stat-pill strong {
-    font-size: 30px;
-    color: var(--text);
-  }
-
-  .section-block {
-    margin-top: 30px;
-  }
-
-  .section-header {
-    margin-bottom: 18px;
-  }
-
-  .section-header h3 {
-    font-size: 20px;
-    color: var(--text);
-    margin-bottom: 4px;
-  }
-
-  .section-header p {
-    color: var(--muted);
-    font-size: 14px;
-  }
-
-  .model-grid,
-  .command-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
-  }
-
-  .saved-card,
-  .command-card {
-    margin-top: 0;
-    padding: 20px;
-  }
-
-  .saved-head {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 16px;
-    align-items: flex-start;
-  }
-
-  .saved-name,
-  .command-title {
+  .intro-title,
+  .section-title {
     font-size: 16px;
     font-weight: 700;
     color: var(--text);
+    margin-bottom: 12px;
   }
 
-  .saved-meta {
-    color: var(--muted);
-    font-size: 13px;
-    margin-top: 4px;
-  }
-
-  .saved-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-
-  .saved-badge.primary {
-    background: rgba(37, 99, 235, 0.12);
-    color: var(--primary);
-  }
-
-  .saved-badge.success {
-    background: rgba(16, 185, 129, 0.14);
-    color: var(--success);
-  }
-
-  .saved-body {
-    display: grid;
-    gap: 12px;
-  }
-
-  .saved-body div {
-    padding: 14px;
-    border-radius: 12px;
-    background: rgba(15, 23, 42, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.05);
-  }
-
-  .saved-body span {
-    display: block;
-    color: var(--muted);
-    font-size: 12px;
-    margin-bottom: 6px;
-  }
-
-  .saved-body strong {
-    color: var(--text);
-    font-size: 13px;
-    word-break: break-word;
-  }
-
-  .download-link,
-  .table-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--primary);
-    background: rgba(37, 99, 235, 0.08);
-    border: 1px solid rgba(37, 99, 235, 0.12);
-    border-radius: 999px;
-    padding: 8px 14px;
-    margin-top: 16px;
-    transition: all 0.2s ease;
-  }
-
-  .download-link:hover,
-  .table-link:hover {
-    background: rgba(37, 99, 235, 0.14);
-  }
-
-  .table-shell {
-    margin-top: 0;
-    padding: 0;
-    overflow: hidden;
-  }
-
-  .metrics-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-  }
-
-  .metrics-table thead {
-    background: #f8fafc;
-  }
-
-  .metrics-table th,
-  .metrics-table td {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border);
-    text-align: left;
-    vertical-align: top;
-  }
-
-  .table-main {
-    font-weight: 700;
-    color: var(--text);
-  }
-
-  .table-sub {
-    margin-top: 4px;
-    color: var(--muted);
-    font-size: 12px;
-  }
-
-  .command-shell {
-    margin-top: 14px;
-    padding: 16px;
-    border-radius: 12px;
-    background: #0f172a;
-    color: #e2e8f0;
-    overflow-x: auto;
-    font-size: 12px;
+  .intro-copy {
+    font-size: 14px;
+    color: var(--text-secondary);
     line-height: 1.7;
+  }
+
+  .folder-structure {
+    margin: 0;
     white-space: pre-wrap;
     word-break: break-word;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    font-family: Consolas, "Courier New", monospace;
   }
 
-  @media (max-width: 1100px) {
-    .stats-strip,
-    .model-grid,
-    .command-grid {
-      grid-template-columns: 1fr;
-    }
+  .model-tabs {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    border-bottom: 2px solid var(--border);
+  }
 
-    .table-shell {
-      overflow-x: auto;
+  .model-tab {
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  }
+
+  .model-tab.active {
+    color: var(--primary);
+  }
+
+  .model-tab.active::after {
+    content: "";
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--primary);
+  }
+
+  .form-section {
+    display: none;
+  }
+
+  .form-section.active,
+  .progress-section.active {
+    display: block;
+  }
+
+  .form-group {
+    margin-bottom: 18px;
+  }
+
+  .form-group-wide {
+    grid-column: span 1;
+  }
+
+  .form-group label {
+    display: block;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+
+  .form-group input,
+  .form-group select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid var(--border);
+    font-size: 14px;
+    font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  }
+
+  .field-help {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .progress-section {
+    display: none;
+  }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .progress-status {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 6px;
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--primary);
+  }
+
+  .progress-bar-container {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: var(--primary);
+    transition: width 0.3s;
+  }
+
+  .progress-message {
+    color: var(--muted);
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+
+  .log-container {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 16px;
+    border-radius: 8px;
+    max-height: 260px;
+    overflow-y: auto;
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .output-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .output-link {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    background: rgba(37, 99, 235, 0.03);
+    border: 1px solid rgba(37, 99, 235, 0.1);
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--text);
+    font-size: 13px;
+  }
+
+  @media (max-width: 900px) {
+    .builder-intro,
+    .form-row {
+      grid-template-columns: 1fr;
     }
   }
 </style>
+
+<script>
+  let currentJobId = null;
+  let pollInterval = null;
+
+  document.querySelectorAll(".model-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".model-tab").forEach((item) => item.classList.remove("active"));
+      document.querySelectorAll(".form-section").forEach((item) => item.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById(tab.dataset.target).classList.add("active");
+    });
+  });
+
+  function updateBundleHint() {
+    const select = document.getElementById("train-bundle-relative");
+    const hint = document.getElementById("bundle-hint");
+    const option = select.options[select.selectedIndex];
+    hint.textContent = option?.dataset?.hint || "Hãy build database trước.";
+  }
+
+  function startBuild(jobType) {
+    const payload = { job_type: jobType };
+
+    if (jobType === "build_database") {
+      payload.source_dir = document.getElementById("db-source-dir").value.trim();
+      payload.database_name = document.getElementById("db-name").value.trim();
+      payload.min_images_per_person = document.getElementById("db-min-images").value;
+      payload.max_images_per_person = document.getElementById("db-max-images").value;
+      payload.test_size = document.getElementById("db-test-size").value;
+      payload.face_detection = document.getElementById("db-face-detection").value;
+    } else {
+      payload.bundle_relative = document.getElementById("train-bundle-relative").value;
+      payload.model_type = document.getElementById("train-model-type").value;
+      payload.n_components = document.getElementById("train-n-components").value;
+      payload.k = document.getElementById("train-k").value;
+      payload.metric = document.getElementById("train-metric").value;
+      payload.C = document.getElementById("train-c").value;
+      payload.kernel = document.getElementById("train-kernel").value;
+      payload.gamma = document.getElementById("train-gamma").value;
+      payload.output_name = document.getElementById("train-output-name").value.trim();
+    }
+
+    fetch("/database-builder/build", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+        currentJobId = data.job_id;
+        document.getElementById("progress-section").classList.add("active");
+        document.getElementById("output-section").style.display = "none";
+        document.getElementById("output-list").innerHTML = "";
+        if (pollInterval) clearInterval(pollInterval);
+        pollInterval = setInterval(pollStatus, 1000);
+      });
+  }
+
+  function pollStatus() {
+    if (!currentJobId) return;
+    fetch(`/database-builder/status/${currentJobId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        document.getElementById("progress-bar").style.width = data.progress + "%";
+        document.getElementById("progress-message").textContent = data.message;
+        document.getElementById("progress-status").textContent = data.status.toUpperCase();
+
+        const logContainer = document.getElementById("log-container");
+        logContainer.innerHTML = "";
+        (data.logs || []).forEach((log) => {
+          const line = document.createElement("div");
+          line.className = "log-line";
+          line.textContent = log;
+          logContainer.appendChild(line);
+        });
+        logContainer.scrollTop = logContainer.scrollHeight;
+
+        if (data.outputs && data.outputs.length) {
+          const section = document.getElementById("output-section");
+          const list = document.getElementById("output-list");
+          list.innerHTML = "";
+          section.style.display = "block";
+          data.outputs.forEach((item) => {
+            const link = document.createElement("a");
+            link.className = "output-link";
+            link.href = `/downloads/${item.category}/${item.filename}`;
+            link.innerHTML = `<span>${item.label}</span><span>${item.relative_path}</span>`;
+            list.appendChild(link);
+          });
+        }
+
+        if (data.status === "completed" || data.status === "failed") {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
+      });
+  }
+
+  updateBundleHint();
+</script>
 {% endblock %}

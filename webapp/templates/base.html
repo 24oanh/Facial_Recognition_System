@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ page_title }} | Math for ML</title>
+    <title>{{ page_title }} | Face Demo</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -24,32 +24,25 @@
           alt="Project logo"
         />
         <div class="logo-copy">
-          <b>Math for ML Dashboard</b><br />
-          <span>PCA + KNN vs PCA + SVM cho bai toan nhan dang khuon mat</span>
+          <b>TRƯỜNG ĐẠI HỌC CÔNG NGHỆ KỸ THUẬT TP.HCM</b><br />
+          <span>Web demo nhận dạng khuôn mặt - Đồ án cuối kỳ môn học: Toán cho Trí tuệ nhân tạo</span>
         </div>
       </div>
 
       <nav>
-        <a href="/" class="{{ 'active' if active == 'home' }}">Tong quan</a>
+        <a href="/" class="{{ 'active' if active == 'home' }}">Nhận dạng</a>
         <a href="/realtime" class="{{ 'active' if active == 'realtime' }}"
-          >Pipeline</a
-        >
-        <a href="/batch" class="{{ 'active' if active == 'batch' }}"
-          >Du lieu</a
+          >Realtime</a
         >
         <a
           href="/database-builder"
           class="{{ 'active' if active == 'database_builder' }}"
-          >Artifacts</a
+          >Database Builder</a
         >
+        <a href="/about" class="{{ 'active' if active == 'about' }}">About</a>
       </nav>
     </header>
 
     <main>{% block content %}{% endblock %}</main>
-
-    <footer class="site-footer">
-      Tong hop artifact tu `data/processed`, `results/metrics` va
-      `webapp/saved_models`.
-    </footer>
   </body>
 </html>

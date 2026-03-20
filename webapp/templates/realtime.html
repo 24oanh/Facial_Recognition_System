@@ -1,380 +1,442 @@
 {% extends "base.html" %} {% block content %}
-<div class="card pipeline-card">
-  <div class="page-head">
-    <h2>Pipeline va quy trinh thuc nghiem</h2>
-    <p class="subtitle">
-      Trang nay thay cho demo realtime cu, tap trung mo ta workflow, tham so va
-      cac tieu chi danh gia dang duoc su dung trong du an hien tai.
-    </p>
-  </div>
+<div class="card realtime-card">
+  <h2>Nhận diện khuôn mặt Realtime</h2>
+  <p class="subtitle">
+    Sử dụng webcam để chạy nhận dạng thời gian thực với các artifact `PCA + KNN`
+    và `PCA + SVM` đang có trong dự án.
+  </p>
 
-  <div class="workflow-layout">
-    <section class="result-box flow-panel">
-      <div class="panel-title">Luong xu ly chinh</div>
-      <div class="flow-list">
-        {% for item in pipeline_steps %}
-        <article class="flow-item">
-          <div class="flow-step">{{ item.step }}</div>
-          <div class="flow-content">
-            <h3>{{ item.title }}</h3>
-            <p>{{ item.description }}</p>
-          </div>
-        </article>
-        {% endfor %}
+  <div class="realtime-container">
+    <div class="video-section">
+      <div class="video-wrapper">
+        <div class="video-placeholder" id="videoPlaceholder">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M23 7l-7 5 7 5V7z"></path>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+          </svg>
+          <p>Camera chưa được bật</p>
+          <p class="hint">Nhấn nút bên dưới để khởi động camera</p>
+        </div>
+        <img id="videoFeed" src="" alt="Video Feed" style="display: none" />
       </div>
-    </section>
 
-    <section class="result-box parameter-panel">
-      <div class="panel-title">Thong so hien tai tu `src/configs/config.py`</div>
-      <div class="parameter-grid">
-        {% for item in model_parameters %}
-        <article class="parameter-card">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-          <p>{{ item.detail }}</p>
-        </article>
-        {% endfor %}
-      </div>
-    </section>
-  </div>
-
-  <section class="section-block">
-    <div class="section-header">
-      <div>
-        <h3>Preset dataset dang hien dien trong repo</h3>
-        <p>
-          Moi card ben duoi lay tu bundle uu tien cua tung dataset, bao gom preset,
-          cach bieu dien du lieu va thong tin preprocessing.
-        </p>
+      <div class="video-controls">
+        <button class="btn-toggle" id="btnToggle" onclick="toggleCamera()">
+          <span class="btn-icon" id="btnIcon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </span>
+        </button>
       </div>
     </div>
 
-    <div class="preset-grid">
-      {% for item in dataset_overviews %}
-      <article class="result-box preset-card">
-        <div class="preset-head">
-          <div>
-            <div class="preset-name">{{ item.dataset_label }}</div>
-            <p>{{ item.description }}</p>
-          </div>
-          {% if item.featured_bundle %}
-          <span class="preset-badge">{{ item.featured_bundle.preset_label }}</span>
-          {% endif %}
-        </div>
-
-        {% if item.featured_bundle %}
-        <div class="preset-meta">
-          <div>
-            <span>Representation</span>
-            <strong>{{ item.featured_bundle.representation_label }}</strong>
-          </div>
-          <div>
-            <span>Face detection</span>
-            <strong>{{ item.featured_bundle.face_detection_label }}</strong>
-          </div>
-          <div>
-            <span>Image size</span>
-            <strong>{{ item.featured_bundle.image_size_label }}</strong>
-          </div>
-          <div>
-            <span>Bundle path</span>
-            <strong>{{ item.featured_bundle.relative_path }}</strong>
-          </div>
-        </div>
-        {% else %}
-        <p class="empty-note">Chua tim thay processed bundle cho dataset nay.</p>
-        {% endif %}
-      </article>
-      {% endfor %}
-    </div>
-  </section>
-
-  <section class="section-block two-column">
-    <article class="result-box info-panel">
-      <div class="panel-title">Tieu chi so sanh</div>
-      <ul class="accent-list">
-        {% for item in comparison_axes %}
-        <li>{{ item }}</li>
-        {% endfor %}
-      </ul>
-    </article>
-
-    <article class="result-box info-panel">
-      <div class="panel-title">Mapping source code</div>
-      <div class="structure-grid">
-        {% for item in structure_cards %}
-        <div class="structure-card">
-          <strong>{{ item.path }}</strong>
-          <p>{{ item.detail }}</p>
-        </div>
-        {% endfor %}
-      </div>
-    </article>
-  </section>
-
-  <section class="section-block">
-    <div class="section-header">
-      <div>
-        <h3>Hai pipeline duoc theo doi</h3>
-        <p>
-          Khong doi theme, chi doi noi dung tu deep-learning demo sang cac thanh
-          phan dung voi bai toan PCA scratch trong repo nay.
-        </p>
-      </div>
-    </div>
-
-    <div class="model-grid">
-      {% for model in model_cards %}
-      <article class="model-card {{ model.key }}">
-        <div class="model-row">
-          <h4>{{ model.title }}</h4>
-          <span class="model-chip {{ model.accent }}">{{ model.key }}</span>
-        </div>
-        <p class="model-summary">{{ model.summary }}</p>
-        <ul class="accent-list compact">
-          {% for detail in model.details %}
-          <li>{{ detail }}</li>
+    <div class="result-section">
+      <div class="model-selector-panel">
+        <h4>Chọn profile</h4>
+        <select id="profileSelect" class="demo-select" onchange="changeProfile(this.value)">
+          {% for profile in profiles %}
+          <option
+            value="{{ profile.key }}"
+            {{ 'selected' if selected_profile_key == profile.key }}
+          >
+            {{ profile.title }}
+          </option>
           {% endfor %}
-        </ul>
-      </article>
-      {% endfor %}
+        </select>
+      </div>
+
+      <div class="model-selector-panel">
+        <h4>Chọn model</h4>
+        <div class="model-options">
+          <label class="model-option {{ 'selected' if realtime_model_key == 'pca_knn' }}" id="optKNN">
+            <input type="radio" name="model" value="pca_knn" {{ 'checked' if realtime_model_key == 'pca_knn' }} onchange="changeModel('pca_knn')" />
+            <span class="model-radio"></span>
+            <span class="model-name">PCA + KNN</span>
+          </label>
+          <label class="model-option {{ 'selected' if realtime_model_key == 'pca_svm' }}" id="optSVM">
+            <input type="radio" name="model" value="pca_svm" {{ 'checked' if realtime_model_key == 'pca_svm' }} onchange="changeModel('pca_svm')" />
+            <span class="model-radio"></span>
+            <span class="model-name">PCA + SVM</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="result-panel">
+        <h3>Kết quả nhận diện</h3>
+
+        <div class="result-item">
+          <span class="result-label">Profile</span>
+          <span class="result-value" id="profileValue">--</span>
+        </div>
+
+        <div class="result-item">
+          <span class="result-label">Danh tính</span>
+          <span class="result-value" id="identityValue">--</span>
+        </div>
+
+        <div class="result-item">
+          <span class="result-label">Độ tin cậy</span>
+          <div class="confidence-bar-wrapper">
+            <div class="confidence-bar" id="confidenceBar" style="width: 0%"></div>
+          </div>
+          <span class="result-value" id="confidenceValue">0%</span>
+        </div>
+
+        <div class="result-item">
+          <span class="result-label">Trạng thái</span>
+          <span class="status-badge" id="statusBadge">
+            <span class="status-dot"></span>
+            Chờ khởi động
+          </span>
+        </div>
+      </div>
     </div>
-  </section>
+  </div>
 </div>
 
 <style>
-  .pipeline-card {
-    max-width: 1220px;
+  .realtime-card {
+    max-width: 1100px;
   }
 
-  .page-head {
-    margin-bottom: 26px;
-  }
-
-  .workflow-layout {
+  .realtime-container {
     display: grid;
-    grid-template-columns: 1.15fr 0.85fr;
+    grid-template-columns: 1.45fr 1fr;
+    gap: 28px;
+    margin-top: 24px;
+  }
+
+  .video-section {
+    display: flex;
+    flex-direction: column;
     gap: 20px;
   }
 
-  .flow-panel,
-  .parameter-panel,
-  .info-panel,
-  .preset-card {
-    margin-top: 0;
-    padding: 22px;
+  .video-wrapper {
+    position: relative;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    border-radius: 16px;
+    overflow: hidden;
+    aspect-ratio: 4/3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--border);
   }
 
-  .panel-title {
+  .video-placeholder {
+    text-align: center;
+    color: var(--muted);
+  }
+
+  .video-placeholder svg {
+    margin-bottom: 16px;
+    opacity: 0.5;
+    color: var(--primary);
+  }
+
+  .video-placeholder p {
+    margin: 4px 0;
     font-size: 16px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .video-placeholder .hint {
+    font-size: 13px;
+    font-weight: 400;
+    opacity: 0.7;
+  }
+
+  #videoFeed {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .video-controls {
+    display: flex;
+    justify-content: center;
+  }
+
+  .btn-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  }
+
+  .btn-toggle.running {
+    background: var(--error);
+  }
+
+  .result-section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .model-selector-panel,
+  .result-panel {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+  }
+
+  .model-selector-panel h4,
+  .result-panel h3 {
+    font-size: 15px;
     font-weight: 700;
     color: var(--text);
+    margin-bottom: 14px;
+  }
+
+  .demo-select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  }
+
+  .model-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .model-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+
+  .model-option.selected {
+    border-color: var(--primary);
+    background: rgba(37, 99, 235, 0.08);
+  }
+
+  .model-option input[type="radio"] {
+    display: none;
+  }
+
+  .model-radio {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-radius: 50%;
+    position: relative;
+  }
+
+  .model-option.selected .model-radio {
+    border-color: var(--primary);
+  }
+
+  .model-option.selected .model-radio::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    background: var(--primary);
+    border-radius: 50%;
+  }
+
+  .model-name {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .result-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     margin-bottom: 18px;
   }
 
-  .flow-list {
-    display: grid;
-    gap: 18px;
+  .result-item:last-child {
+    margin-bottom: 0;
   }
 
-  .flow-item {
-    display: grid;
-    grid-template-columns: 56px 1fr;
-    gap: 14px;
-    align-items: start;
-  }
-
-  .flow-step {
-    width: 56px;
-    height: 56px;
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(
-      135deg,
-      rgba(37, 99, 235, 0.15) 0%,
-      rgba(37, 99, 235, 0.08) 100%
-    );
-    color: var(--primary);
-    font-weight: 800;
-    letter-spacing: 0.05em;
-  }
-
-  .flow-content {
-    padding: 16px;
-    border-radius: 14px;
-    background: rgba(37, 99, 235, 0.04);
-    border: 1px solid rgba(37, 99, 235, 0.08);
-  }
-
-  .flow-content h3 {
-    font-size: 15px;
-    color: var(--text);
-    margin-bottom: 6px;
-  }
-
-  .flow-content p {
-    color: var(--text-secondary);
-    font-size: 14px;
-  }
-
-  .parameter-grid,
-  .preset-grid,
-  .model-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-  }
-
-  .parameter-card,
-  .structure-card {
-    padding: 16px;
-    border-radius: 14px;
-    background: rgba(15, 23, 42, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.06);
-  }
-
-  .parameter-card span,
-  .preset-meta span {
-    display: block;
+  .result-label {
     font-size: 12px;
+    font-weight: 600;
     color: var(--muted);
-    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
-  .parameter-card strong,
-  .preset-meta strong,
-  .structure-card strong {
-    display: block;
-    color: var(--text);
-    font-size: 15px;
-    margin-bottom: 6px;
-  }
-
-  .parameter-card p,
-  .structure-card p {
-    color: var(--text-secondary);
-    font-size: 13px;
-  }
-
-  .section-block {
-    margin-top: 30px;
-  }
-
-  .section-header h3 {
-    font-size: 20px;
-    color: var(--text);
-    margin-bottom: 4px;
-  }
-
-  .section-header p {
-    color: var(--muted);
-    font-size: 14px;
-  }
-
-  .preset-head,
-  .model-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    align-items: flex-start;
-    margin-bottom: 16px;
-  }
-
-  .preset-name,
-  .model-row h4 {
-    font-size: 16px;
+  .result-value {
+    font-size: 22px;
     font-weight: 700;
-    color: var(--text);
+    color: var(--primary);
   }
 
-  .preset-head p,
-  .model-summary {
-    color: var(--muted);
-    font-size: 13px;
-    margin-top: 4px;
+  .confidence-bar-wrapper {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
   }
 
-  .preset-badge,
-  .model-chip {
+  .confidence-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%);
+    border-radius: 4px;
+  }
+
+  .status-badge {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: rgba(37, 99, 235, 0.12);
-    color: var(--primary);
-    font-size: 11px;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-
-  .preset-meta {
-    display: grid;
-    gap: 12px;
-  }
-
-  .preset-meta div {
-    padding: 14px;
-    border-radius: 12px;
-    background: rgba(37, 99, 235, 0.03);
-    border: 1px solid rgba(37, 99, 235, 0.08);
-  }
-
-  .two-column {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px;
-  }
-
-  .accent-list {
-    list-style: none;
-    padding: 0;
-    display: grid;
-    gap: 12px;
-  }
-
-  .accent-list li {
-    position: relative;
-    padding-left: 18px;
-    color: var(--text-secondary);
-    font-size: 14px;
-  }
-
-  .accent-list li::before {
-    content: "";
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--primary);
-    position: absolute;
-    left: 0;
-    top: 8px;
-  }
-
-  .compact li {
-    font-size: 13px;
-  }
-
-  .structure-grid {
-    display: grid;
-    gap: 12px;
-  }
-
-  .empty-note {
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--border);
     color: var(--muted);
+    border-radius: 20px;
     font-size: 13px;
+    font-weight: 600;
+    width: fit-content;
   }
 
-  @media (max-width: 1080px) {
-    .workflow-layout,
-    .two-column,
-    .parameter-grid,
-    .preset-grid,
-    .model-grid {
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .status-badge.active {
+    background: rgba(37, 99, 235, 0.15);
+    color: var(--primary);
+  }
+
+  .status-badge.success {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success);
+  }
+
+  .status-badge.error {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--error);
+  }
+
+  @media (max-width: 900px) {
+    .realtime-container {
       grid-template-columns: 1fr;
     }
   }
 </style>
+
+<script>
+  let isRunning = false;
+  let resultInterval = null;
+
+  function toggleCamera() {
+    if (isRunning) stopCamera();
+    else startCamera();
+  }
+
+  function startCamera() {
+    const videoFeed = document.getElementById("videoFeed");
+    const placeholder = document.getElementById("videoPlaceholder");
+    const btnToggle = document.getElementById("btnToggle");
+    const btnIcon = document.getElementById("btnIcon");
+    const statusBadge = document.getElementById("statusBadge");
+
+    videoFeed.src = "/video_feed";
+    videoFeed.style.display = "block";
+    placeholder.style.display = "none";
+    btnToggle.classList.add("running");
+    btnIcon.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>`;
+    statusBadge.innerHTML = '<span class="status-dot"></span>Đang chạy';
+    statusBadge.className = "status-badge active";
+    isRunning = true;
+    resultInterval = setInterval(updateResult, 500);
+  }
+
+  function stopCamera() {
+    fetch("/stop_camera", { method: "POST" }).then(() => {
+      const videoFeed = document.getElementById("videoFeed");
+      const placeholder = document.getElementById("videoPlaceholder");
+      const btnToggle = document.getElementById("btnToggle");
+      const btnIcon = document.getElementById("btnIcon");
+      const statusBadge = document.getElementById("statusBadge");
+      videoFeed.src = "";
+      videoFeed.style.display = "none";
+      placeholder.style.display = "block";
+      btnToggle.classList.remove("running");
+      btnIcon.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+      statusBadge.innerHTML = '<span class="status-dot"></span>Đã dừng';
+      statusBadge.className = "status-badge";
+      isRunning = false;
+      if (resultInterval) clearInterval(resultInterval);
+      document.getElementById("identityValue").textContent = "--";
+      document.getElementById("confidenceValue").textContent = "0%";
+      document.getElementById("confidenceBar").style.width = "0%";
+      document.getElementById("profileValue").textContent = "--";
+    });
+  }
+
+  function changeModel(model) {
+    document.querySelectorAll(".model-option").forEach((opt) => opt.classList.remove("selected"));
+    if (model === "pca_knn") document.getElementById("optKNN").classList.add("selected");
+    if (model === "pca_svm") document.getElementById("optSVM").classList.add("selected");
+    fetch("/set_realtime_model", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: model }),
+    });
+  }
+
+  function changeProfile(profileKey) {
+    fetch("/set_realtime_profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile_key: profileKey }),
+    });
+  }
+
+  function updateResult() {
+    fetch("/realtime_result")
+      .then((res) => res.json())
+      .then((data) => {
+        document.getElementById("profileValue").textContent = data.profile_title || "--";
+        document.getElementById("identityValue").textContent = data.identity || "--";
+        const conf = Math.round((data.confidence || 0) * 100);
+        document.getElementById("confidenceValue").textContent = conf + "%";
+        document.getElementById("confidenceBar").style.width = conf + "%";
+        const statusBadge = document.getElementById("statusBadge");
+        if (data.status === "success") {
+          statusBadge.innerHTML = '<span class="status-dot"></span>Đã nhận diện';
+          statusBadge.className = "status-badge success";
+        } else if (data.status === "error") {
+          statusBadge.innerHTML = '<span class="status-dot"></span>Lỗi';
+          statusBadge.className = "status-badge error";
+        } else {
+          statusBadge.innerHTML = '<span class="status-dot"></span>Đang chạy';
+          statusBadge.className = "status-badge active";
+        }
+      });
+  }
+
+  window.addEventListener("beforeunload", () => {
+    if (isRunning) fetch("/stop_camera", { method: "POST" });
+  });
+</script>
 {% endblock %}

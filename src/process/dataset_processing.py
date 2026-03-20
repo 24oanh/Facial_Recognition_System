@@ -76,6 +76,7 @@ IMAGE_SHAPE = tuple(
 )
 RANDOM_STATE = int(getattr(config_module, "RANDOM_STATE", 42))
 TEST_SIZE = float(getattr(config_module, "TEST_SIZE", 0.2))
+CUSTOM_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".pgm"}
 
 
 @dataclass(slots=True)
@@ -303,6 +304,48 @@ def _collect_lfw_samples(raw_dir: str | Path | None = None) -> list[FaceSample]:
     ]
 
 
+def _collect_custom_folder_samples(raw_dir: str | Path) -> list[FaceSample]:
+    base_dir = Path(raw_dir).expanduser().resolve()
+    if not base_dir.exists():
+        raise ValueError(f"Source directory does not exist: {base_dir}")
+    if not base_dir.is_dir():
+        raise ValueError(f"Source path is not a directory: {base_dir}")
+
+    subject_dirs = sorted(
+        (path for path in base_dir.iterdir() if path.is_dir()),
+        key=lambda path: path.name.lower(),
+    )
+    if not subject_dirs:
+        raise ValueError(
+            "No person folders were found. Expected structure: source_dir/person_name/image.jpg"
+        )
+
+    samples: list[FaceSample] = []
+    for subject_dir in subject_dirs:
+        image_paths = sorted(
+            (
+                path
+                for path in subject_dir.iterdir()
+                if path.is_file() and path.suffix.lower() in CUSTOM_IMAGE_EXTENSIONS
+            ),
+            key=lambda path: path.name.lower(),
+        )
+        for path in image_paths:
+            samples.append(
+                FaceSample(
+                    path=path,
+                    subject_name=subject_dir.name,
+                    sample_name=path.stem,
+                )
+            )
+    if not samples:
+        raise ValueError(
+            "No image files were found under the person folders. Supported extensions: "
+            + ", ".join(sorted(CUSTOM_IMAGE_EXTENSIONS))
+        )
+    return samples
+
+
 def _collect_samples(
     dataset_name: str,
     raw_dir: str | Path | None = None,
@@ -321,6 +364,11 @@ def _collect_samples(
     if normalized == "lfw":
         resolved_dir = _resolve_lfw_dir(raw_dir)
         return _collect_lfw_samples(resolved_dir), resolved_dir
+    if normalized in {"custom", "folder", "directory"}:
+        if raw_dir is None:
+            raise ValueError("raw_dir is required when dataset_name='custom'.")
+        resolved_dir = Path(raw_dir).expanduser().resolve()
+        return _collect_custom_folder_samples(resolved_dir), resolved_dir
     raise ValueError(f"Unsupported dataset name: {dataset_name}")
 
 
@@ -533,14 +581,27 @@ def analyze_subject_count_thresholds(
     raw_dir: str | Path | None = None,
     thresholds: list[int] | None = None,
     include_ambient: bool = False,
+    face_detection: str | None = None,
+    min_face_area_ratio: float = 0.0,
+    face_scale_factor: float = 1.1,
+    face_min_neighbors: int = 5,
+    face_min_size: tuple[int, int] = (30, 30),
 ) -> list[dict[str, Any]]:
     samples, resolved_raw_dir = _collect_samples(
         dataset_name=dataset_name,
         raw_dir=raw_dir,
         include_ambient=include_ambient,
     )
+    validated_samples, face_validation_stats = _validate_samples_with_face_detection(
+        samples=samples,
+        face_detection=face_detection,
+        min_face_area_ratio=min_face_area_ratio,
+        face_scale_factor=face_scale_factor,
+        face_min_neighbors=face_min_neighbors,
+        face_min_size=face_min_size,
+    )
     grouped: dict[str, list[FaceSample]] = defaultdict(list)
-    for sample in samples:
+    for sample in validated_samples:
         grouped[sample.subject_name].append(sample)
 
     subject_counts = [len(subject_samples) for subject_samples in grouped.values()]
@@ -574,6 +635,9 @@ def analyze_subject_count_thresholds(
                 "dataset_name": _normalize_dataset_name(dataset_name),
                 "raw_dir": str(resolved_raw_dir),
                 "threshold": threshold,
+                "face_detection": face_detection,
+                "min_face_area_ratio": min_face_area_ratio,
+                "face_validation_samples_after": face_validation_stats["face_validation_samples_after"],
                 "subjects_kept": len(eligible_counts),
                 "samples_kept_without_cap": int(sum(eligible_counts)),
                 "samples_kept_if_balanced": int(len(eligible_counts) * threshold),
@@ -1121,6 +1185,159 @@ def process_face_dataset_with_preset(
     config = get_dataset_processing_preset(dataset_name, preset_name)
     config.update(overrides)
     return process_face_dataset(dataset_name=dataset_name, **config)
+
+
+def build_face_database_from_directory(
+    source_dir: str | Path,
+    database_name: str | None = None,
+    output_root: str | Path = PROCESSED_DIR,
+    min_images_per_subject: int = 2,
+    max_images_per_subject: int | None = None,
+    image_size: tuple[int, int] | None = IMAGE_SIZE,
+    normalize: bool = True,
+    flatten: bool = True,
+    test_size: float = 0.0,
+    random_state: int = RANDOM_STATE,
+    stratify: bool = True,
+    face_detection: str | None = "mtcnn",
+    face_padding_ratio: float = 0.25,
+    face_crop_fallback: str = "original",
+    face_square_crop: bool = True,
+    face_scale_factor: float = 1.1,
+    face_min_neighbors: int = 5,
+    face_min_size: tuple[int, int] = (30, 30),
+    min_face_area_ratio: float = 0.0,
+    save_artifacts: bool = True,
+) -> dict[str, Any]:
+    resolved_source_dir = Path(source_dir).expanduser().resolve()
+    profile_title = (database_name or resolved_source_dir.name).strip() or resolved_source_dir.name
+    profile_slug = re.sub(r"[^a-z0-9]+", "_", profile_title.lower()).strip("_") or "database"
+
+    collected_samples = _collect_custom_folder_samples(resolved_source_dir)
+    face_validated_samples, face_validation_stats = _validate_samples_with_face_detection(
+        collected_samples,
+        face_detection=face_detection,
+        min_face_area_ratio=min_face_area_ratio,
+        face_scale_factor=face_scale_factor,
+        face_min_neighbors=face_min_neighbors,
+        face_min_size=face_min_size,
+    )
+    filtered_samples, filter_stats = _filter_samples_by_subject_count(
+        face_validated_samples,
+        min_images_per_subject=min_images_per_subject,
+        max_images_per_subject=max_images_per_subject,
+        subject_selection="original",
+        balance_subjects=False,
+        target_images_per_subject=None,
+    )
+    X, y, metadata = create_model_inputs(
+        samples=filtered_samples,
+        image_size=image_size,
+        normalize=normalize,
+        flatten=flatten,
+        face_detection=face_detection,
+        face_padding_ratio=face_padding_ratio,
+        face_crop_fallback=face_crop_fallback,
+        face_square_crop=face_square_crop,
+        face_scale_factor=face_scale_factor,
+        face_min_neighbors=face_min_neighbors,
+        face_min_size=face_min_size,
+        min_face_area_ratio=min_face_area_ratio,
+    )
+
+    if test_size > 0:
+        train_indices, test_indices, stratify_used = _build_split_indices(
+            y=y,
+            test_size=test_size,
+            random_state=random_state,
+            stratify=stratify,
+        )
+    else:
+        train_indices = np.arange(y.shape[0], dtype=int)
+        test_indices = np.empty((0,), dtype=int)
+        stratify_used = False
+
+    X_train = X[train_indices]
+    X_test = X[test_indices] if test_indices.size else np.empty((0, *X.shape[1:]), dtype=X.dtype)
+    y_train = y[train_indices]
+    y_test = y[test_indices] if test_indices.size else np.empty((0,), dtype=y.dtype)
+    train_metadata = _subset_metadata(metadata, train_indices)
+    test_metadata = _subset_metadata(metadata, test_indices)
+
+    label_distribution = Counter(y.tolist())
+    summary = {
+        "dataset_name": "custom",
+        "database_name": profile_title,
+        "profile_slug": profile_slug,
+        "profile_title": profile_title,
+        "raw_dir": str(resolved_source_dir),
+        "min_images_per_subject": min_images_per_subject,
+        "max_images_per_subject": max_images_per_subject,
+        "max_subjects": None,
+        "subject_selection": "original",
+        "balance_subjects": False,
+        "target_images_per_subject": None,
+        "include_ambient": False,
+        "face_detection": face_detection,
+        "face_padding_ratio": face_padding_ratio,
+        "face_crop_fallback": face_crop_fallback,
+        "face_square_crop": face_square_crop,
+        "face_scale_factor": face_scale_factor,
+        "face_min_neighbors": face_min_neighbors,
+        "face_min_size": list(face_min_size),
+        "min_face_area_ratio": min_face_area_ratio,
+        "normalize": normalize,
+        "flatten": flatten,
+        "image_size": list(image_size or IMAGE_SIZE),
+        "image_shape": list(IMAGE_SHAPE if image_size is None else (image_size[1], image_size[0])),
+        "test_size": test_size,
+        "random_state": random_state,
+        "stratify_requested": stratify,
+        "stratify_used": stratify_used,
+        "samples_total": int(X.shape[0]),
+        "train_samples": int(X_train.shape[0]),
+        "test_samples": int(X_test.shape[0]),
+        "classes_total": len(metadata["label_names"]),
+        "feature_shape": list(X.shape),
+        "train_shape": list(X_train.shape),
+        "test_shape": list(X_test.shape),
+        "label_distribution": {str(label): count for label, count in sorted(label_distribution.items())},
+        "face_validation_stats": face_validation_stats,
+        "filter_stats": filter_stats,
+        "dropped_subject_count": len(filter_stats["dropped_subjects"]),
+        "truncated_subject_count": len(filter_stats["truncated_subjects"]),
+        "balance_images_per_subject": filter_stats["balance_images_per_subject"],
+        "processing_stats": metadata["processing_stats"],
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+    output_dir = Path(output_root) / "custom" / profile_slug
+    if save_artifacts:
+        save_processed_dataset_bundle(
+            X=X,
+            y=y,
+            metadata=metadata,
+            summary=summary,
+            output_dir=output_dir,
+            train_indices=train_indices,
+            test_indices=test_indices,
+        )
+
+    return {
+        "X": X,
+        "y": y,
+        "train_indices": train_indices,
+        "test_indices": test_indices,
+        "X_train": X_train,
+        "X_test": X_test,
+        "y_train": y_train,
+        "y_test": y_test,
+        "metadata": metadata,
+        "train_metadata": train_metadata,
+        "test_metadata": test_metadata,
+        "summary": summary,
+        "output_dir": str(output_dir),
+    }
 
 
 def process_orl_dataset(**kwargs) -> dict[str, Any]:
