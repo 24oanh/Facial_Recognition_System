@@ -25,7 +25,8 @@
     <div class="intro-card">
       <div class="intro-title">Nguyên tắc build</div>
       <div class="intro-copy">
-        MTCNN được dùng mặc định khi build database.<br />
+        MTCNN được dùng mặc định khi build database, kèm face alignment 5-point và chuẩn hoá sáng nhẹ.<br />
+        Khi alignment không áp được, hệ thống sẽ fallback sang crop mặt có padding nhẹ rồi mới resize về kích thước chuẩn.<br />
         Hệ thống lấy toàn bộ ảnh trong từng folder người, không chia test
         split, không giữ lại ảnh để đánh giá thông số.<br />
         Sau khi chạy xong, model mới sẽ xuất hiện ngay ở trang nhận dạng và realtime.
@@ -75,11 +76,11 @@
     <div class="form-row">
       <div class="form-group">
         <label>n_components</label>
-        <input type="number" id="train-n-components" value="20" min="2" />
+        <input type="number" id="train-n-components" value="{{ builder_defaults.n_components }}" min="2" />
       </div>
       <div class="form-group">
         <label>KNN k</label>
-        <input type="number" id="train-k" value="3" min="1" />
+        <input type="number" id="train-k" value="{{ builder_defaults.k }}" min="1" />
       </div>
     </div>
 
@@ -87,14 +88,14 @@
       <div class="form-group">
         <label>KNN metric</label>
         <select id="train-metric">
-          <option value="euclidean">euclidean</option>
-          <option value="cosine">cosine</option>
-          <option value="manhattan">manhattan</option>
+          <option value="euclidean" {{ 'selected' if builder_defaults.metric == 'euclidean' }}>euclidean</option>
+          <option value="cosine" {{ 'selected' if builder_defaults.metric == 'cosine' }}>cosine</option>
+          <option value="manhattan" {{ 'selected' if builder_defaults.metric == 'manhattan' }}>manhattan</option>
         </select>
       </div>
       <div class="form-group">
         <label>SVM C</label>
-        <input type="number" id="train-c" value="1.0" step="0.1" min="0.1" />
+        <input type="number" id="train-c" value="{{ builder_defaults.C }}" step="0.1" min="0.1" />
       </div>
     </div>
 
@@ -102,19 +103,25 @@
       <div class="form-group">
         <label>SVM kernel</label>
         <select id="train-kernel">
-          <option value="linear">linear</option>
-          <option value="rbf">rbf</option>
-          <option value="poly">poly</option>
+          <option value="linear" {{ 'selected' if builder_defaults.kernel == 'linear' }}>linear</option>
+          <option value="rbf" {{ 'selected' if builder_defaults.kernel == 'rbf' }}>rbf</option>
+          <option value="poly" {{ 'selected' if builder_defaults.kernel == 'poly' }}>poly</option>
         </select>
       </div>
       <div class="form-group">
         <label>SVM gamma</label>
         <select id="train-gamma-mode" onchange="toggleGammaCustom()">
-          <option value="scale">scale</option>
-          <option value="auto">auto</option>
-          <option value="custom">custom</option>
+          <option value="scale" {{ 'selected' if builder_defaults.gamma == 'scale' }}>scale</option>
+          <option value="auto" {{ 'selected' if builder_defaults.gamma == 'auto' }}>auto</option>
+          <option value="custom" {{ 'selected' if builder_defaults.gamma not in ['scale', 'auto'] }}>custom</option>
         </select>
-        <input type="text" id="train-gamma-custom" placeholder="Ví dụ: 0.01" style="display: none; margin-top: 10px" />
+        <input
+          type="text"
+          id="train-gamma-custom"
+          value="{{ builder_defaults.gamma if builder_defaults.gamma not in ['scale', 'auto'] else '' }}"
+          placeholder="Ví dụ: 0.01"
+          style="display: {{ 'block' if builder_defaults.gamma not in ['scale', 'auto'] else 'none' }}; margin-top: 10px"
+        />
       </div>
     </div>
 
@@ -133,6 +140,45 @@
       </div>
 
       <div class="progress-message" id="progress-message">Đang khởi tạo...</div>
+
+      <div class="build-stats">
+        <div class="build-stat">
+          <span>Detector</span>
+          <strong id="stat-detector">--</strong>
+        </div>
+        <div class="build-stat">
+          <span>Người</span>
+          <strong id="stat-subjects">0</strong>
+        </div>
+        <div class="build-stat">
+          <span>Ảnh nguồn</span>
+          <strong id="stat-images">0</strong>
+        </div>
+        <div class="build-stat">
+          <span>Đã xử lý</span>
+          <strong id="stat-processed">0</strong>
+        </div>
+        <div class="build-stat">
+          <span>Giữ lại</span>
+          <strong id="stat-kept">0</strong>
+        </div>
+        <div class="build-stat">
+          <span>Không thấy bbox</span>
+          <strong id="stat-no-face">0</strong>
+        </div>
+        <div class="build-stat">
+          <span>Align OK</span>
+          <strong id="stat-aligned">0</strong>
+        </div>
+        <div class="build-stat">
+          <span>Lỗi đọc</span>
+          <strong id="stat-unreadable">0</strong>
+        </div>
+        <div class="build-stat">
+          <span>Reject</span>
+          <strong id="stat-rejected">0</strong>
+        </div>
+      </div>
 
       <h4 style="margin-top: 18px; margin-bottom: 8px">Logs</h4>
       <div class="log-container" id="log-container">
@@ -279,6 +325,37 @@
     font-size: 13px;
   }
 
+  .build-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .build-stat {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(37, 99, 235, 0.12);
+    background: rgba(37, 99, 235, 0.04);
+  }
+
+  .build-stat span {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 6px;
+  }
+
+  .build-stat strong {
+    display: block;
+    font-size: 16px;
+    color: var(--text);
+    word-break: break-word;
+  }
+
   .log-container {
     background: #0f172a;
     color: #e2e8f0;
@@ -315,11 +392,21 @@
     .form-row {
       grid-template-columns: 1fr;
     }
+
+    .build-stats {
+      grid-template-columns: 1fr 1fr;
+    }
   }
 </style>
 
 <script>
   const sourceFolderInput = document.getElementById("source-folder-input");
+
+  function setBuildStat(id, value) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = value ?? "--";
+  }
 
   function openFolderDialog() {
     if (sourceFolderInput.showPicker) sourceFolderInput.showPicker();
@@ -393,6 +480,18 @@
         }
         currentJobId = data.job_id;
         document.getElementById("progress-section").classList.add("active");
+        document.getElementById("progress-status").textContent = "RUNNING";
+        document.getElementById("progress-bar").style.width = "0%";
+        document.getElementById("progress-message").textContent = "Đang khởi tạo job build...";
+        setBuildStat("stat-detector", "--");
+        setBuildStat("stat-subjects", "0");
+        setBuildStat("stat-images", String(files.length));
+        setBuildStat("stat-processed", "0");
+        setBuildStat("stat-kept", "0");
+        setBuildStat("stat-no-face", "0");
+        setBuildStat("stat-aligned", "0");
+        setBuildStat("stat-unreadable", "0");
+        setBuildStat("stat-rejected", "0");
         document.getElementById("output-section").style.display = "none";
         document.getElementById("output-list").innerHTML = "";
         if (pollInterval) clearInterval(pollInterval);
@@ -408,6 +507,16 @@
         document.getElementById("progress-bar").style.width = data.progress + "%";
         document.getElementById("progress-message").textContent = data.message;
         document.getElementById("progress-status").textContent = data.status.toUpperCase();
+        const details = data.details || {};
+        setBuildStat("stat-detector", details.detector_mode || details.detector || "--");
+        setBuildStat("stat-subjects", details.subjects_total ?? 0);
+        setBuildStat("stat-images", details.images_total ?? 0);
+        setBuildStat("stat-processed", details.processed_images ?? 0);
+        setBuildStat("stat-kept", details.kept_images ?? 0);
+        setBuildStat("stat-no-face", details.no_face_images ?? 0);
+        setBuildStat("stat-aligned", details.aligned_images ?? 0);
+        setBuildStat("stat-unreadable", details.unreadable_images ?? 0);
+        setBuildStat("stat-rejected", details.rejected_images ?? 0);
 
         const logContainer = document.getElementById("log-container");
         logContainer.innerHTML = "";

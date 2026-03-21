@@ -2,8 +2,9 @@
 <div class="card realtime-card">
   <h2>Nhận diện khuôn mặt Realtime</h2>
   <p class="subtitle">
-    Sử dụng webcam để chạy nhận dạng thời gian thực với các artifact `PCA + KNN`
-    và `PCA + SVM` đang có trong dự án.
+    Webcam mode dùng detector nhẹ của OpenCV để lấy bounding box nhanh hơn,
+    sau đó áp dụng pipeline preprocessing của profile trước khi chạy
+    `PCA + KNN` hoặc `PCA + SVM`.
   </p>
 
   <div class="realtime-container">
@@ -44,6 +45,10 @@
           </option>
           {% endfor %}
         </select>
+        <p class="panel-note">
+          Realtime lấy bbox bằng detector nhẹ của OpenCV; phần crop/align vẫn bám
+          theo bundle đã build để giữ train và inference đồng nhất.
+        </p>
       </div>
 
       <div class="model-selector-panel">
@@ -62,8 +67,33 @@
         </div>
       </div>
 
+      <div class="model-selector-panel">
+        <h4>Ngưỡng Unknown</h4>
+        <div class="threshold-box">
+          <input
+            type="range"
+            id="unknownThreshold"
+            min="0"
+            max="100"
+            step="1"
+            value="{{ (unknown_threshold * 100)|round(0)|int }}"
+            oninput="updateThresholdValue(this.value)"
+            onchange="changeUnknownThreshold(this.value)"
+          />
+          <div class="threshold-meta">
+            <span>Confidence nhỏ hơn ngưỡng này sẽ thành Unknown</span>
+            <strong id="unknownThresholdValue">{{ (unknown_threshold * 100)|round(0)|int }}%</strong>
+          </div>
+        </div>
+      </div>
+
       <div class="result-panel">
         <h3>Kết quả nhận diện</h3>
+
+        <div class="realtime-note">
+          Detector realtime: <strong>OpenCV Haar</strong><br />
+          Inference crop: <strong>theo pipeline của profile</strong>
+        </div>
 
         <div class="result-item">
           <span class="result-label">Profile</span>
@@ -71,16 +101,36 @@
         </div>
 
         <div class="result-item">
-          <span class="result-label">Danh tính</span>
+          <span class="result-label">Số khuôn mặt</span>
+          <span class="result-value" id="faceCountValue">0</span>
+        </div>
+
+        <div class="result-item">
+          <span class="result-label">Ngưỡng đang dùng</span>
+          <span class="result-value" id="activeThresholdValue">{{ (unknown_threshold * 100)|round(0)|int }}%</span>
+        </div>
+
+        <div class="result-item">
+          <span class="result-label">Khuôn mặt chính</span>
           <span class="result-value" id="identityValue">--</span>
         </div>
 
         <div class="result-item">
-          <span class="result-label">Độ tin cậy</span>
+          <span class="result-label" id="confidenceLabel">Độ tin cậy</span>
           <div class="confidence-bar-wrapper">
             <div class="confidence-bar" id="confidenceBar" style="width: 0%"></div>
           </div>
           <span class="result-value" id="confidenceValue">0%</span>
+        </div>
+
+        <div class="result-item" id="knnVoteRatioRow" style="display: none">
+          <span class="result-label">Vote ratio</span>
+          <span class="result-value" id="knnVoteRatioValue">--</span>
+        </div>
+
+        <div class="result-item" id="knnDistanceRow" style="display: none">
+          <span class="result-label">Distance confidence</span>
+          <span class="result-value" id="knnDistanceValue">--</span>
         </div>
 
         <div class="result-item">
@@ -89,6 +139,12 @@
             <span class="status-dot"></span>
             Chờ khởi động
           </span>
+        </div>
+
+        <div class="result-item realtime-face-list-box">
+          <span class="result-label">Tất cả khuôn mặt</span>
+          <div class="face-list-empty" id="faceListEmpty">Chưa có khuôn mặt nào được phát hiện.</div>
+          <div class="face-list" id="faceList"></div>
         </div>
       </div>
     </div>
@@ -200,6 +256,24 @@
     margin-bottom: 14px;
   }
 
+  .panel-note,
+  .realtime-note {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .realtime-note {
+    margin-top: 0;
+    margin-bottom: 18px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(37, 99, 235, 0.05);
+    border: 1px solid rgba(37, 99, 235, 0.12);
+    color: var(--text-secondary);
+  }
+
   .demo-select {
     width: 100%;
     padding: 10px 14px;
@@ -207,6 +281,31 @@
     border-radius: 10px;
     font-size: 14px;
     font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  }
+
+  .threshold-box {
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: rgba(37, 99, 235, 0.03);
+  }
+
+  .threshold-box input[type="range"] {
+    width: 100%;
+  }
+
+  .threshold-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .threshold-meta strong {
+    color: var(--primary);
+    font-size: 13px;
   }
 
   .model-options {
@@ -331,8 +430,97 @@
     color: var(--success);
   }
 
+  .status-badge.unknown {
+    background: rgba(148, 163, 184, 0.18);
+    color: #475569;
+  }
+
   .status-badge.error {
     background: rgba(239, 68, 68, 0.15);
+    color: var(--error);
+  }
+
+  .realtime-face-list-box {
+    margin-top: 4px;
+  }
+
+  .face-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .face-list-empty {
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px dashed var(--border);
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .face-chip {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(37, 99, 235, 0.04);
+  }
+
+  .face-chip.unknown {
+    border-color: rgba(148, 163, 184, 0.24);
+    background: rgba(148, 163, 184, 0.08);
+  }
+
+  .face-chip.error {
+    border-color: rgba(239, 68, 68, 0.2);
+    background: rgba(239, 68, 68, 0.06);
+  }
+
+  .face-chip-index {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--primary);
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .face-chip-main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .face-chip-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .face-chip-meta {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .face-chip-score {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--primary);
+    text-align: right;
+  }
+
+  .face-chip.unknown .face-chip-score {
+    color: #475569;
+  }
+
+  .face-chip.error .face-chip-score {
     color: var(--error);
   }
 
@@ -347,9 +535,82 @@
   let isRunning = false;
   let resultInterval = null;
 
+  function displayStateLabel(state) {
+    if (state === "recognized") return "Recognized";
+    if (state === "unknown") return "Unknown";
+    if (state === "error") return "Error";
+    return "Pending";
+  }
+
+  function formatPercent(value) {
+    if (typeof value !== "number" || Number.isNaN(value)) return "--";
+    return `${Math.round(value * 100)}%`;
+  }
+
+  function setKnnDetails(data) {
+    const isKnn = data && data.model_key === "pca_knn";
+    const voteRow = document.getElementById("knnVoteRatioRow");
+    const distanceRow = document.getElementById("knnDistanceRow");
+    const voteValue = document.getElementById("knnVoteRatioValue");
+    const distanceValue = document.getElementById("knnDistanceValue");
+    const confidenceLabel = document.getElementById("confidenceLabel");
+
+    voteRow.style.display = isKnn ? "" : "none";
+    distanceRow.style.display = isKnn ? "" : "none";
+    confidenceLabel.textContent = isKnn ? "Độ tin cậy hiển thị" : "Độ tin cậy";
+
+    voteValue.textContent = isKnn ? formatPercent(data.knn_vote_ratio) : "--";
+    distanceValue.textContent = isKnn ? formatPercent(data.knn_distance_confidence) : "--";
+  }
+
   function toggleCamera() {
     if (isRunning) stopCamera();
     else startCamera();
+  }
+
+  function updateThresholdValue(value) {
+    const normalized = Math.max(0, Math.min(100, Number(value) || 0));
+    const text = `${normalized}%`;
+    document.getElementById("unknownThresholdValue").textContent = text;
+    document.getElementById("activeThresholdValue").textContent = text;
+  }
+
+  function changeUnknownThreshold(value) {
+    updateThresholdValue(value);
+    fetch("/set_realtime_unknown_threshold", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unknown_threshold: Number(value) / 100 }),
+    });
+  }
+
+  function setFaceList(faces) {
+    const list = document.getElementById("faceList");
+    const empty = document.getElementById("faceListEmpty");
+    list.innerHTML = "";
+    if (!faces || faces.length === 0) {
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+    faces.forEach((face) => {
+      const conf = Math.round((face.confidence || 0) * 100);
+      const bbox = face.bbox || [];
+      const state = face.display_state || "";
+      const row = document.createElement("div");
+      row.className = `face-chip ${state}`.trim();
+      const scoreText =
+        state === "recognized" ? `${conf}%` : state === "unknown" ? "Unknown" : state === "error" ? "Error" : `${conf}%`;
+      row.innerHTML = `
+        <div class="face-chip-index">${face.index ?? "?"}</div>
+        <div class="face-chip-main">
+          <div class="face-chip-name">${face.identity || "--"}</div>
+          <div class="face-chip-meta">${displayStateLabel(state)} • bbox: [${bbox.join(", ")}]</div>
+        </div>
+        <div class="face-chip-score">${scoreText}</div>
+      `;
+      list.appendChild(row);
+    });
   }
 
   function startCamera() {
@@ -390,6 +651,10 @@
       document.getElementById("confidenceValue").textContent = "0%";
       document.getElementById("confidenceBar").style.width = "0%";
       document.getElementById("profileValue").textContent = "--";
+      document.getElementById("faceCountValue").textContent = "0";
+      document.getElementById("activeThresholdValue").textContent = document.getElementById("unknownThresholdValue").textContent;
+      setKnnDetails(null);
+      setFaceList([]);
     });
   }
 
@@ -397,6 +662,7 @@
     document.querySelectorAll(".model-option").forEach((opt) => opt.classList.remove("selected"));
     if (model === "pca_knn") document.getElementById("optKNN").classList.add("selected");
     if (model === "pca_svm") document.getElementById("optSVM").classList.add("selected");
+    setKnnDetails({ model_key: model, knn_vote_ratio: null, knn_distance_confidence: null });
     fetch("/set_realtime_model", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -417,15 +683,27 @@
       .then((res) => res.json())
       .then((data) => {
         document.getElementById("profileValue").textContent = data.profile_title || "--";
+        document.getElementById("faceCountValue").textContent = String(data.face_count || 0);
+        if (typeof data.unknown_threshold === "number") {
+          updateThresholdValue(Math.round(data.unknown_threshold * 100));
+        }
         document.getElementById("identityValue").textContent = data.identity || "--";
         const conf = Math.round((data.confidence || 0) * 100);
         document.getElementById("confidenceValue").textContent = conf + "%";
         document.getElementById("confidenceBar").style.width = conf + "%";
+        setKnnDetails(data);
+        setFaceList(data.faces || []);
         const statusBadge = document.getElementById("statusBadge");
-        if (data.status === "success") {
+        if (data.display_state === "recognized") {
           statusBadge.innerHTML = '<span class="status-dot"></span>Đã nhận diện';
           statusBadge.className = "status-badge success";
-        } else if (data.status === "error") {
+        } else if (data.display_state === "unknown") {
+          statusBadge.innerHTML = '<span class="status-dot"></span>Unknown';
+          statusBadge.className = "status-badge unknown";
+        } else if (data.status === "no_face") {
+          statusBadge.innerHTML = '<span class="status-dot"></span>Chưa thấy mặt';
+          statusBadge.className = "status-badge";
+        } else if (data.display_state === "error" || data.status === "error") {
           statusBadge.innerHTML = '<span class="status-dot"></span>Lỗi';
           statusBadge.className = "status-badge error";
         } else {

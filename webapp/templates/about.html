@@ -2,18 +2,18 @@
 <div class="card">
   <h2>About dự án</h2>
   <p class="subtitle">
-    Trang giới thiệu ngắn về web demo nhận dạng khuôn mặt của dự án hiện tại,
-    nhóm thực hiện và các model đang được dùng trong hệ thống.
+    Tổng quan về các benchmark profile đang được đưa lên web, cách dùng model
+    và phần realtime/deployment của dự án hiện tại.
   </p>
 
   <div class="about-stats">
     <div class="about-stat">
-      <span class="about-stat-label">Dataset có sẵn</span>
+      <span class="about-stat-label">Nhóm dữ liệu đang dùng</span>
       <strong>{{ dataset_cards|length }}</strong>
     </div>
     <div class="about-stat">
-      <span class="about-stat-label">Profile đang dùng</span>
-      <strong>{{ profile_total }}</strong>
+      <span class="about-stat-label">Profile benchmark</span>
+      <strong>{{ benchmark_profile_total }}</strong>
     </div>
     <div class="about-stat">
       <span class="about-stat-label">Artifact model</span>
@@ -75,7 +75,7 @@
   <section class="about-section">
     <div class="section-head">
       <h3>Mô hình đang dùng</h3>
-      <p>Giao diện demo hiện so sánh và vận hành trực tiếp hai pipeline của dự án.</p>
+      <p>Trang benchmark và realtime cùng dùng hai pipeline PCA của đồ án.</p>
     </div>
     <div class="about-grid about-grid-2">
       {% for item in model_cards %}
@@ -89,8 +89,28 @@
 
   <section class="about-section">
     <div class="section-head">
+      <h3>Bộ dữ liệu đang đưa lên web</h3>
+      <p>Chỉ giữ các profile còn dùng thực tế trong web demo hiện tại.</p>
+    </div>
+    <div class="about-grid about-grid-2">
+      {% for item in dataset_cards %}
+      <article class="about-card">
+        <div class="about-card-title">{{ item.label }}</div>
+        <p class="about-card-copy">{{ item.description }}</p>
+        <div class="tag-list" style="margin-top: 12px">
+          {% for preset in item.presets %}
+          <span class="tag">{{ preset }}</span>
+          {% endfor %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="about-section">
+    <div class="section-head">
       <h3>Profile đang sẵn sàng trên web</h3>
-      <p>Mỗi profile gắn với processed bundle và các model artifact tương ứng.</p>
+      <p>Mỗi profile gắn với processed bundle, preprocessing và artifact model tương ứng.</p>
     </div>
 
     {% if profiles %}
@@ -100,6 +120,9 @@
         <div>
           <div class="about-card-title">{{ profile.title }}</div>
           <div class="profile-path">{{ profile.bundle_relative }}</div>
+          <div class="profile-meta">
+            {{ profile.subjects_total }} người · {{ profile.samples_total }} ảnh · {{ profile.processing_label }}
+          </div>
         </div>
         <div class="tag-list align-end">
           {% for model in profile.models.values() %}
@@ -289,6 +312,12 @@
     font-size: 12px;
     color: var(--muted);
     word-break: break-word;
+  }
+
+  .profile-meta {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
   }
 
   @media (max-width: 900px) {

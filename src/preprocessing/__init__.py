@@ -1,5 +1,5 @@
 from .downloader import download_extended_yale_b_raw, download_lfw_raw, ensure_dataset_downloaded
-from .face_detection import detect_and_crop_face, detect_largest_face_bbox
+from .face_detection import detect_and_crop_face, detect_face_bboxes, detect_largest_face_bbox, warmup_face_detector
 from .loader import (
     load_and_split,
     load_dataset,
@@ -13,6 +13,7 @@ __all__ = [
     "download_extended_yale_b_raw",
     "download_lfw_raw",
     "detect_and_crop_face",
+    "detect_face_bboxes",
     "detect_largest_face_bbox",
     "ensure_dataset_downloaded",
     "load_and_split",
@@ -22,4 +23,5 @@ __all__ = [
     "load_orl_dataset",
     "preprocess_batch",
     "preprocess_image",
+    "warmup_face_detector",
 ]

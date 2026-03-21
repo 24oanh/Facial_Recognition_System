@@ -40,6 +40,14 @@ _PROCESSING_PROFILES: dict[str, dict[str, Any]] = {
         "unsharp_amount": 0.45,
         "unsharp_sigma": 1.0,
     },
+    "custom_aligned": {
+        "percentile_clip": (1.0, 99.2),
+        "target_mean": 0.48,
+        "clahe_clip_limit": 1.6,
+        "clahe_grid_size": (8, 8),
+        "unsharp_amount": 0.12,
+        "unsharp_sigma": 0.9,
+    },
 }
 
 _QUALITY_GATES: dict[str, dict[str, float]] = {
@@ -305,6 +313,7 @@ def preprocess_image(
     flatten: bool = True,
     face_detection: str | None = None,
     face_bbox: FaceBBox | None = None,
+    face_align: bool = False,
     face_padding_ratio: float = 0.0,
     face_crop_fallback: str = "original",
     face_square_crop: bool = False,
@@ -322,6 +331,9 @@ def preprocess_image(
         "face_crop_fallback": face_crop_fallback,
         "face_fallback_used": False,
         "face_bbox": None,
+        "face_alignment_enabled": bool(face_align and image_size is not None and face_detection is not None),
+        "face_aligned": False,
+        "face_alignment_method": None,
         "processing_profile": _normalize_profile_name(processing_profile),
     }
 
@@ -340,8 +352,27 @@ def preprocess_image(
             "face_crop_fallback": face_crop_fallback,
             "face_fallback_used": False,
             "face_bbox": expanded_bbox,
+            "face_alignment_enabled": bool(face_align and image_size is not None and face_detection is not None),
+            "face_aligned": False,
+            "face_alignment_method": None,
             "processing_profile": _normalize_profile_name(processing_profile),
         }
+        if face_align and image_size is not None and face_detection is not None:
+            image_to_process, alignment_metadata = detect_and_crop_face(
+                image=image_to_process,
+                detector=face_detection,
+                padding_ratio=0.0,
+                square=False,
+                fallback="original",
+                scale_factor=face_scale_factor,
+                min_neighbors=face_min_neighbors,
+                min_size=face_min_size,
+                align=True,
+                alignment_output_size=tuple(image_size),
+            )
+            processing_metadata["face_alignment_enabled"] = bool(alignment_metadata.get("face_alignment_enabled"))
+            processing_metadata["face_aligned"] = bool(alignment_metadata.get("face_aligned"))
+            processing_metadata["face_alignment_method"] = alignment_metadata.get("face_alignment_method")
     elif face_detection is not None:
         image_to_process, face_metadata = detect_and_crop_face(
             image=image,
@@ -352,6 +383,8 @@ def preprocess_image(
             scale_factor=face_scale_factor,
             min_neighbors=face_min_neighbors,
             min_size=face_min_size,
+            align=face_align,
+            alignment_output_size=tuple(image_size) if image_size is not None else None,
         )
         processing_metadata.update(face_metadata)
         if image_to_process is None:
@@ -387,6 +420,7 @@ def preprocess_batch(
     normalize: bool = True,
     flatten: bool = True,
     face_detection: str | None = None,
+    face_align: bool = False,
     face_padding_ratio: float = 0.0,
     face_crop_fallback: str = "original",
     face_square_crop: bool = False,
@@ -405,6 +439,7 @@ def preprocess_batch(
             flatten=flatten,
             face_detection=face_detection,
             face_bbox=None,
+            face_align=face_align,
             face_padding_ratio=face_padding_ratio,
             face_crop_fallback=face_crop_fallback,
             face_square_crop=face_square_crop,

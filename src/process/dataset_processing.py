@@ -7,7 +7,7 @@ import csv
 import json
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 from PIL import Image, UnidentifiedImageError
@@ -76,7 +76,7 @@ IMAGE_SHAPE = tuple(
 )
 RANDOM_STATE = int(getattr(config_module, "RANDOM_STATE", 42))
 TEST_SIZE = float(getattr(config_module, "TEST_SIZE", 0.2))
-CUSTOM_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".pgm"}
+CUSTOM_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".pgm", ".webp"}
 
 
 @dataclass(slots=True)
@@ -749,6 +749,7 @@ def _preprocess_samples(
     normalize: bool,
     flatten: bool,
     face_detection: str | None = None,
+    face_align: bool = False,
     face_padding_ratio: float = 0.0,
     face_crop_fallback: str = "original",
     face_square_crop: bool = False,
@@ -758,6 +759,7 @@ def _preprocess_samples(
     min_face_area_ratio: float = 0.0,
     processing_profile: str | None = "standard",
     quality_gate: str | None = None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[list[ProcessedFaceSample], dict[str, Any]]:
     processed_samples: list[ProcessedFaceSample] = []
     unreadable_files: list[str] = []
@@ -766,8 +768,38 @@ def _preprocess_samples(
     face_detected_samples = 0
     face_missed_samples = 0
     face_fallback_used_samples = 0
+    face_aligned_samples = 0
+    face_alignment_failed_samples = 0
 
-    for sample in samples:
+    def _emit_progress(current: int, sample: FaceSample | None = None) -> None:
+        if progress_callback is None:
+            return
+        try:
+            progress_callback(
+                {
+                    "stage": "preprocess",
+                    "current": int(current),
+                    "total": int(len(samples)),
+                    "kept_samples": int(len(processed_samples)),
+                    "skipped_no_face_samples": int(len(skipped_no_face_files)),
+                    "unreadable_samples": int(len(unreadable_files)),
+                    "rejected_extreme_samples": int(len(rejected_extreme_files)),
+                    "face_detected_samples": int(face_detected_samples),
+                    "face_missed_samples": int(face_missed_samples),
+                    "face_fallback_used_samples": int(face_fallback_used_samples),
+                    "face_aligned_samples": int(face_aligned_samples),
+                    "face_alignment_failed_samples": int(face_alignment_failed_samples),
+                    "current_subject": None if sample is None else sample.subject_name,
+                    "current_sample": None if sample is None else sample.sample_name,
+                    "current_path": None if sample is None else str(sample.path),
+                }
+            )
+        except Exception:
+            return
+
+    _emit_progress(0)
+
+    for index, sample in enumerate(samples, start=1):
         try:
             with Image.open(sample.path) as image:
                 processed, processing_metadata = preprocess_image(
@@ -777,6 +809,7 @@ def _preprocess_samples(
                     flatten=flatten,
                     face_detection=face_detection if sample.face_bbox is None else None,
                     face_bbox=sample.face_bbox,
+                    face_align=face_align,
                     face_padding_ratio=face_padding_ratio,
                     face_crop_fallback=face_crop_fallback,
                     face_square_crop=face_square_crop,
@@ -788,10 +821,12 @@ def _preprocess_samples(
                 )
         except (FileNotFoundError, UnidentifiedImageError, OSError):
             unreadable_files.append(str(sample.path))
+            _emit_progress(index, sample)
             continue
 
         if processed is None or processing_metadata is None:
             skipped_no_face_files.append(str(sample.path))
+            _emit_progress(index, sample)
             continue
         if processing_metadata["face_detection_enabled"]:
             if processing_metadata["face_detected"]:
@@ -800,6 +835,11 @@ def _preprocess_samples(
                 face_missed_samples += 1
             if processing_metadata["face_fallback_used"]:
                 face_fallback_used_samples += 1
+            if processing_metadata.get("face_alignment_enabled"):
+                if processing_metadata.get("face_aligned"):
+                    face_aligned_samples += 1
+                else:
+                    face_alignment_failed_samples += 1
 
         quality_metadata = assess_processed_image_quality(
             processed,
@@ -807,6 +847,7 @@ def _preprocess_samples(
         )
         if quality_metadata["rejected"]:
             rejected_extreme_files.append(str(sample.path))
+            _emit_progress(index, sample)
             continue
 
         processed_samples.append(
@@ -821,6 +862,7 @@ def _preprocess_samples(
                 quality_metadata=quality_metadata,
             )
         )
+        _emit_progress(index, sample)
 
     if not processed_samples:
         raise ValueError("No images remained after preprocessing and quality filtering.")
@@ -835,6 +877,9 @@ def _preprocess_samples(
         "rejected_extreme_files": rejected_extreme_files,
         "face_detection_enabled": face_detection is not None,
         "face_detector": face_detection,
+        "face_alignment_enabled": bool(face_align and face_detection is not None),
+        "face_aligned_samples": face_aligned_samples,
+        "face_alignment_failed_samples": face_alignment_failed_samples,
         "face_detected_samples": face_detected_samples,
         "face_missed_samples": face_missed_samples,
         "face_fallback_used_samples": face_fallback_used_samples,
@@ -882,6 +927,7 @@ def create_model_inputs(
     normalize: bool = True,
     flatten: bool = True,
     face_detection: str | None = None,
+    face_align: bool = False,
     face_padding_ratio: float = 0.25,
     face_crop_fallback: str = "original",
     face_square_crop: bool = True,
@@ -891,6 +937,7 @@ def create_model_inputs(
     min_face_area_ratio: float = 0.0,
     processing_profile: str | None = "standard",
     quality_gate: str | None = None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
     processed_samples, payload = _preprocess_samples(
         samples=samples,
@@ -898,6 +945,7 @@ def create_model_inputs(
         normalize=normalize,
         flatten=flatten,
         face_detection=face_detection,
+        face_align=face_align,
         face_padding_ratio=face_padding_ratio,
         face_crop_fallback=face_crop_fallback,
         face_square_crop=face_square_crop,
@@ -907,6 +955,7 @@ def create_model_inputs(
         min_face_area_ratio=min_face_area_ratio,
         processing_profile=processing_profile,
         quality_gate=quality_gate,
+        progress_callback=progress_callback,
     )
     return _build_inputs_from_processed_samples(processed_samples, payload["stats"])
 
@@ -924,6 +973,7 @@ def _build_dataset_output_dir(
     flatten: bool,
     include_ambient: bool,
     face_detection: str | None,
+    face_align: bool,
     face_padding_ratio: float,
     face_square_crop: bool,
     face_crop_fallback: str,
@@ -950,7 +1000,10 @@ def _build_dataset_output_dir(
         padding_token = int(round(face_padding_ratio * 100))
         area_token = int(round(min_face_area_ratio * 100))
         square_token = "square" if face_square_crop else "nosquare"
-        config_parts.append(f"face{face_detection}_pad{padding_token}_area{area_token}_{square_token}_{face_crop_fallback}")
+        align_token = "align" if face_align else "noalign"
+        config_parts.append(
+            f"face{face_detection}_{align_token}_pad{padding_token}_area{area_token}_{square_token}_{face_crop_fallback}"
+        )
     if processing_profile and processing_profile != "standard":
         config_parts.append(f"prep{_normalize_dataset_name(processing_profile)}")
     if quality_gate:
@@ -1129,6 +1182,7 @@ def resolve_processed_dataset_bundle_dir(
         flatten=flatten,
         include_ambient=config.get("include_ambient", False),
         face_detection=config.get("face_detection"),
+        face_align=bool(config.get("face_align", False)),
         face_padding_ratio=config.get("face_padding_ratio", 0.25),
         face_square_crop=config.get("face_square_crop", False),
         face_crop_fallback=config.get("face_crop_fallback", "original"),
@@ -1235,6 +1289,7 @@ def process_face_dataset(
     stratify: bool = True,
     include_ambient: bool = False,
     face_detection: str | None = None,
+    face_align: bool = False,
     face_padding_ratio: float = 0.0,
     face_crop_fallback: str = "original",
     face_square_crop: bool = False,
@@ -1261,6 +1316,7 @@ def process_face_dataset(
         flatten=flatten,
         include_ambient=include_ambient,
         face_detection=face_detection,
+        face_align=face_align,
         face_padding_ratio=face_padding_ratio,
         face_square_crop=face_square_crop,
         face_crop_fallback=face_crop_fallback,
@@ -1282,6 +1338,7 @@ def process_face_dataset(
         normalize=normalize,
         flatten=flatten,
         face_detection=face_detection,
+        face_align=face_align,
         face_padding_ratio=face_padding_ratio,
         face_crop_fallback=face_crop_fallback,
         face_square_crop=face_square_crop,
@@ -1345,6 +1402,8 @@ def process_face_dataset(
         "target_images_per_subject": target_images_per_subject,
         "include_ambient": include_ambient,
         "face_detection": face_detection,
+        "face_align": face_align,
+        "face_alignment_method": "mtcnn_5pt_similarity" if face_align and face_detection == "mtcnn" else None,
         "face_padding_ratio": face_padding_ratio,
         "face_crop_fallback": face_crop_fallback,
         "face_square_crop": face_square_crop,
@@ -1426,6 +1485,7 @@ def build_face_database_from_directory(
     normalize: bool = True,
     flatten: bool = True,
     face_detection: str | None = "mtcnn",
+    face_align: bool = False,
     face_padding_ratio: float = 0.25,
     face_crop_fallback: str = "original",
     face_square_crop: bool = True,
@@ -1436,6 +1496,7 @@ def build_face_database_from_directory(
     processing_profile: str | None = "standard",
     quality_gate: str | None = None,
     save_artifacts: bool = True,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     resolved_source_dir = Path(source_dir).expanduser().resolve()
     profile_title = (database_name or resolved_source_dir.name).strip() or resolved_source_dir.name
@@ -1448,6 +1509,7 @@ def build_face_database_from_directory(
         normalize=normalize,
         flatten=flatten,
         face_detection=face_detection,
+        face_align=face_align,
         face_padding_ratio=face_padding_ratio,
         face_crop_fallback=face_crop_fallback,
         face_square_crop=face_square_crop,
@@ -1457,6 +1519,7 @@ def build_face_database_from_directory(
         min_face_area_ratio=min_face_area_ratio,
         processing_profile=processing_profile,
         quality_gate=quality_gate,
+        progress_callback=progress_callback,
     )
     train_indices = np.arange(y.shape[0], dtype=int)
     test_indices = np.empty((0,), dtype=int)
@@ -1512,6 +1575,8 @@ def build_face_database_from_directory(
         "target_images_per_subject": None,
         "include_ambient": False,
         "face_detection": face_detection,
+        "face_align": face_align,
+        "face_alignment_method": "mtcnn_5pt_similarity" if face_align and face_detection == "mtcnn" else None,
         "face_padding_ratio": face_padding_ratio,
         "face_crop_fallback": face_crop_fallback,
         "face_square_crop": face_square_crop,

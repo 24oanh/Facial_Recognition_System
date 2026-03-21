@@ -31,3 +31,28 @@ webapp/saved_models/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Images
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.webp
+*.gif
+*.ico
+*.svg
+*.webp
+*.gif
+*.ico
+*.svg
+
+# Models
+*.pkl
+*.joblib
+*.pth
+*.pt
+*.pkl.gz
+*.joblib.gz
+*.pth.gz
+*.pt.gz
+

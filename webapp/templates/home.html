@@ -2,8 +2,9 @@
 <div class="card">
   <h2>Nhận dạng khuôn mặt</h2>
   <p class="subtitle">
-    Upload ảnh để so sánh kết quả giữa `PCA + KNN` và `PCA + SVM` trên profile
-    đã train trong dự án hiện tại.
+    Upload ảnh để so sánh kết quả giữa `PCA + KNN` và `PCA + SVM`. Ảnh upload
+    được dò mặt bằng `MTCNN`, rồi đưa qua đúng pipeline preprocessing của
+    profile đang chọn.
   </p>
 
   {% if error_message %}
@@ -33,7 +34,44 @@
         <div class="field-note">{{ selected_profile.bundle_relative }}</div>
       </div>
       {% endif %}
+      <div class="form-field">
+        <label for="unknownThreshold">Ngưỡng Unknown</label>
+        <div class="threshold-box">
+          <input
+            type="range"
+            id="unknownThreshold"
+            name="unknown_threshold"
+            min="0"
+            max="100"
+            step="1"
+            value="{{ (unknown_threshold * 100)|round(0)|int }}"
+            oninput="updateThresholdValue(this.value)"
+          />
+          <div class="threshold-meta">
+            <span>Giá trị hiện tại</span>
+            <strong id="unknownThresholdValue">{{ (unknown_threshold * 100)|round(0)|int }}%</strong>
+          </div>
+        </div>
+      </div>
     </div>
+
+    {% if image_name %}
+    <input type="hidden" name="existing_image_name" value="{{ image_name }}" />
+    <input
+      type="hidden"
+      name="original_image_name"
+      value="{{ result.original_image_name if result and result.original_image_name else image_name }}"
+    />
+    {% endif %}
+
+    <input
+      type="file"
+      name="image"
+      accept="image/*,.pgm"
+      id="imageInput"
+      style="display: none"
+      onchange="submitWithLoading()"
+    />
 
     {% if not image_name %}
     <div class="upload-zone" id="uploadZone">
@@ -55,14 +93,6 @@
           Kéo thả ảnh vào đây hoặc
         </div>
         <label for="imageInput" class="upload-label">Chọn ảnh từ máy</label>
-        <input
-          type="file"
-          name="image"
-          accept="image/*,.pgm"
-          id="imageInput"
-          style="display: none"
-          onchange="submitWithLoading()"
-        />
         <p style="font-size: 12px; color: var(--muted); margin-top: 8px">
           Hỗ trợ: JPG, PNG, BMP, PGM
         </p>
@@ -72,26 +102,31 @@
     <div style="display: flex; gap: 24px; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap">
       <div class="preview-box-large">
         <img
-          src="{{ url_for('static', filename='uploads/' + image_name) }}"
-          alt="Uploaded image"
+          src="{{ url_for('static', filename='uploads/' + preview_image_name) }}"
+          alt="Annotated upload"
           style="width: 100%; height: 100%; object-fit: cover; border-radius: 12px"
         />
       </div>
       <div style="flex: 1; min-width: 280px">
         <div style="font-weight: 600; margin-bottom: 8px; color: var(--text)">
-          Ảnh đã chọn
+          Ảnh gốc với bounding boxes
         </div>
         <div style="font-size: 13px; color: var(--muted); margin-bottom: 16px">
-          {{ image_name }}
+          {{ result.original_image_name if result and result.original_image_name else image_name }}
         </div>
         <div class="profile-box">
           <div><b>Profile:</b> {{ selected_profile.title if selected_profile else 'N/A' }}</div>
           {% if selected_profile %}
           <div><b>Bundle:</b> {{ selected_profile.bundle_relative }}</div>
           {% endif %}
+          {% if result %}
+          <div><b>Số khuôn mặt:</b> {{ result.face_count }}</div>
+          {% endif %}
+          <div><b>Ngưỡng Unknown:</b> {{ (unknown_threshold * 100)|round(0)|int }}%</div>
         </div>
         <div style="margin-top: 16px">
-          <a class="btn-secondary" href="/">Thử ảnh khác</a>
+          <button type="button" class="btn-secondary" onclick="openImageDialog()">Chọn ảnh khác</button>
+          <button type="submit" class="btn-secondary" style="margin-left: 10px">Áp dụng ngưỡng</button>
         </div>
       </div>
     </div>
@@ -99,55 +134,81 @@
   </form>
 
   {% if result %}
-  <div class="model-grid">
-    {% for key in ['pca_knn', 'pca_svm'] %}
-    {% set item = result[key] %}
-    <div class="model-card {{ key }}">
-      <div class="model-head">
-        <div>
-          <div class="model-title">{{ item.model_label }}</div>
-          <div class="model-sub">{{ selected_profile.title if selected_profile else '' }}</div>
-        </div>
-        <span class="status-pill {{ 'success-pill' if item.ok else 'error-pill' }}">
-          {{ 'Success' if item.ok else 'Error' }}
-        </span>
-      </div>
-
-      <table style="width: 100%; margin-top: 12px; font-size: 13px">
-        <tr>
-          <td style="color: var(--muted); padding: 4px 0">Danh tính</td>
-          <td style="text-align: right; font-weight: 600">{{ item.identity }}</td>
-        </tr>
-        <tr>
-          <td style="color: var(--muted); padding: 4px 0">Độ tin cậy</td>
-          <td style="text-align: right; color: var(--primary)">
-            {{ item.confidence|percent }}
-          </td>
-        </tr>
-        <tr>
-          <td style="color: var(--muted); padding: 4px 0">{{ item.score_label }}</td>
-          <td style="text-align: right">{{ "%.4f"|format(item.score) }}</td>
-        </tr>
-        <tr>
-          <td style="color: var(--muted); padding: 4px 0">Thời gian</td>
-          <td style="text-align: right; color: var(--success)">{{ item.time_ms }} ms</td>
-        </tr>
-      </table>
-
-      {% if item.top_k %}
-      <div class="topk-box">
-        <div class="topk-title">Top matches</div>
-        {% for row in item.top_k %}
-        <div class="topk-row">
-          <span>{{ row.identity }}</span>
-          <span>{{ row.confidence|percent }}</span>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-    </div>
-    {% endfor %}
+  <div class="result-box" style="margin-bottom: 20px">
+    Phát hiện {{ result.face_count }} khuôn mặt. Số thứ tự trên ảnh khớp với từng khối kết quả bên dưới.
   </div>
+
+  {% for face in result.faces %}
+  <section class="face-section">
+    <div class="face-section-head">
+      <h3>Khuôn mặt #{{ face.index }}</h3>
+      <span class="face-bbox">bbox: [{{ face.bbox[0] }}, {{ face.bbox[1] }}, {{ face.bbox[2] }}, {{ face.bbox[3] }}]</span>
+    </div>
+
+    <div class="model-grid">
+      {% for key in ['pca_knn', 'pca_svm'] %}
+      {% set item = face[key] %}
+      {% set state = item.display_state or 'error' %}
+      <div class="model-card {{ key }}">
+        <div class="model-head">
+          <div>
+            <div class="model-title">{{ item.model_label }}</div>
+            <div class="model-sub">{{ selected_profile.title if selected_profile else '' }}</div>
+          </div>
+          <span
+            class="status-pill {{ 'success-pill' if state == 'recognized' else 'unknown-pill' if state == 'unknown' else 'error-pill' }}"
+          >
+            {{ 'Recognized' if state == 'recognized' else 'Unknown' if state == 'unknown' else 'Error' }}
+          </span>
+        </div>
+
+        <table style="width: 100%; margin-top: 12px; font-size: 13px">
+          <tr>
+            <td style="color: var(--muted); padding: 4px 0">Danh tính</td>
+            <td style="text-align: right; font-weight: 600">{{ item.identity }}</td>
+          </tr>
+          <tr>
+            <td style="color: var(--muted); padding: 4px 0">{{ 'Độ tin cậy hiển thị' if key == 'pca_knn' else 'Độ tin cậy' }}</td>
+            <td style="text-align: right; color: var(--primary)">
+              {{ item.confidence|percent }}
+            </td>
+          </tr>
+          {% if key == 'pca_knn' %}
+          <tr>
+            <td style="color: var(--muted); padding: 4px 0">Vote ratio</td>
+            <td style="text-align: right">{{ item.knn_vote_ratio|percent }}</td>
+          </tr>
+          <tr>
+            <td style="color: var(--muted); padding: 4px 0">Distance confidence</td>
+            <td style="text-align: right">{{ item.knn_distance_confidence|percent }}</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td style="color: var(--muted); padding: 4px 0">{{ item.score_label }}</td>
+            <td style="text-align: right">{{ "%.4f"|format(item.score) }}</td>
+          </tr>
+          <tr>
+            <td style="color: var(--muted); padding: 4px 0">Thời gian</td>
+            <td style="text-align: right; color: var(--success)">{{ item.time_ms }} ms</td>
+          </tr>
+        </table>
+
+        {% if item.top_k %}
+        <div class="topk-box">
+          <div class="topk-title">Top matches</div>
+          {% for row in item.top_k %}
+          <div class="topk-row">
+            <span>{{ row.identity }}</span>
+            <span>{{ row.confidence|percent }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
   {% endif %}
 </div>
 
@@ -186,6 +247,53 @@
     word-break: break-word;
   }
 
+  .threshold-box {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(37, 99, 235, 0.03);
+  }
+
+  .threshold-box input[type="range"] {
+    width: 100%;
+  }
+
+  .threshold-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .threshold-meta strong {
+    color: var(--primary);
+    font-size: 13px;
+  }
+
+  .face-section + .face-section {
+    margin-top: 24px;
+  }
+
+  .face-section-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+
+  .face-section-head h3 {
+    font-size: 18px;
+    color: var(--text);
+  }
+
+  .face-bbox {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
   .model-head {
     display: flex;
     justify-content: space-between;
@@ -219,6 +327,11 @@
     color: var(--success);
   }
 
+  .unknown-pill {
+    background: rgba(148, 163, 184, 0.18);
+    color: #475569;
+  }
+
   .error-pill {
     background: rgba(239, 68, 68, 0.14);
     color: var(--error);
@@ -248,6 +361,11 @@
     .model-grid {
       grid-template-columns: 1fr;
     }
+
+    .face-section-head {
+      flex-direction: column;
+      align-items: flex-start;
+    }
   }
 </style>
 
@@ -258,6 +376,16 @@
 
   function submitWithLoading() {
     form.submit();
+  }
+
+  function updateThresholdValue(value) {
+    const label = document.getElementById("unknownThresholdValue");
+    if (label) label.textContent = `${value}%`;
+  }
+
+  function openImageDialog() {
+    if (imageInput.showPicker) imageInput.showPicker();
+    else imageInput.click();
   }
 
   if (uploadZone && imageInput) {
