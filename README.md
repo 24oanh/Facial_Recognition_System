@@ -1,3 +1,4 @@
+
 # Math for ML
 
 Dự án so sánh hai pipeline nhận dạng khuôn mặt:
@@ -80,3 +81,5 @@ Mỗi lần xử lý sẽ lưu:
 
 - `src/models/pca.py`, `src/models/pca_knn.py`, `src/models/pca_svm.py` hiện là compatibility wrapper để không gãy import cũ.
 - Đường import khuyến nghị cho code mới là từ `src.features`, `src.models`, `src.pipelines`, `src.preprocessing`.
+=======
+# Facial_Recognition_System
