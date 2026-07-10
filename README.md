@@ -18,6 +18,7 @@ Nhận diện khuôn mặt xây dựng từ đầu các thuật toán PCA (Eigen
   - Tải xuống dữ liệu đã xử lý, số liệu đánh giá (metrics) và mô hình đã lưu.
 - **Notebook** cho phân tích khám phá dữ liệu (EDA) và huấn luyện mô hình trên từng bộ dữ liệu/điều kiện.
 ## Cấu trúc thư mục
+'''
 .
 ├── src/
 │   ├── configs/          # Cấu hình dự án, siêu tham số PCA/KNN/SVM
@@ -34,3 +35,4 @@ Nhận diện khuôn mặt xây dựng từ đầu các thuật toán PCA (Eigen
 │   ├── statics/          # CSS, ảnh tải lên
 │   └── saved_models/     # Mô hình PCA+KNN / PCA+SVM đã huấn luyện sẵn (.pkl/.joblib)
 └── notebooks/            # EDA và huấn luyện cho ORL, Extended Yale B (điều kiện khắc nghiệt/tăng cường)
+'''
