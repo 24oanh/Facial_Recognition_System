@@ -33,4 +33,4 @@ Nhận diện khuôn mặt xây dựng từ đầu các thuật toán PCA (Eigen
 │   ├── templates/        # Giao diện HTML (home, realtime, database builder, about)
 │   ├── statics/          # CSS, ảnh tải lên
 │   └── saved_models/     # Mô hình PCA+KNN / PCA+SVM đã huấn luyện sẵn (.pkl/.joblib)
-└── notebooks/             # EDA và huấn luyện cho ORL, Extended Yale B (điều kiện khắc nghiệt/tăng cường)
+└── notebooks/            # EDA và huấn luyện cho ORL, Extended Yale B (điều kiện khắc nghiệt/tăng cường)
