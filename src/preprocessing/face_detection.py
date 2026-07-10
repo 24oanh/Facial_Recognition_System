@@ -19,8 +19,9 @@ except ModuleNotFoundError:  # pragma: no cover - dependency failure is environm
     torch = None
     MTCNN = None
 
+from typing import Tuple
 
-FaceBBox = tuple[int, int, int, int]
+FaceBBox = Tuple[int, int, int, int]
 FaceLandmarks = np.ndarray
 
 

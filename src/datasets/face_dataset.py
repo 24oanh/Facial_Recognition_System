@@ -9,7 +9,7 @@ from ..configs.config import DATA_DIR, EXTENDED_YALE_B_DIR, IMAGE_SIZE, LFW_DATA
 from ..preprocessing.loader import load_dataset
 
 
-@dataclass(slots=True)
+@dataclass
 class FaceDataset:
     data: np.ndarray
     target: np.ndarray

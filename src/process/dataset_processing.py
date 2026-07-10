@@ -79,7 +79,7 @@ TEST_SIZE = float(getattr(config_module, "TEST_SIZE", 0.2))
 CUSTOM_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".pgm", ".webp"}
 
 
-@dataclass(slots=True)
+@dataclass
 class FaceSample:
     path: Path
     subject_name: str
@@ -88,7 +88,7 @@ class FaceSample:
     face_area_ratio: float | None = None
 
 
-@dataclass(slots=True)
+@dataclass
 class ProcessedFaceSample:
     path: Path
     subject_name: str

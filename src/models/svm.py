@@ -50,7 +50,7 @@ def _compute_kernel(
     raise ValueError(f"Unsupported kernel '{kernel}'.")
 
 
-@dataclass(slots=True)
+@dataclass
 class _BinarySVMModel:
     positive_label_: object
     negative_label_: object | None

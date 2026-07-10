@@ -131,7 +131,7 @@ realtime_result: dict[str, Any] = {
 }
 
 
-@dataclass(slots=True)
+@dataclass
 class BuildJob:
     id: str
     job_type: str
@@ -2162,4 +2162,5 @@ def download_artifact(category: str, filename: str):
 if __name__ == "__main__":
     if not realtime_profile_key:
         realtime_profile_key = _default_realtime_profile_key()
-    app.run(debug=True)
+    # Tắt use_reloader để server không bị restart khi lưu file model
+    app.run(debug=True, use_reloader=False)
