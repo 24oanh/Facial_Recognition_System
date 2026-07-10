@@ -20,9 +20,10 @@ Nhận diện khuôn mặt xây dựng từ đầu các thuật toán PCA (Eigen
 ## Cài đặt
 **pip install flask werkzeug numpy scipy pandas scikit-learn matplotlib seaborn Pillow joblib opencv-python**
 _Tùy chọn (để dùng MTCNN phát hiện khuôn mặt):_
+
 **pip install torch facenet-pytorch**
 ## Chạy webapp
 cd webapp
 python app.py
-Mở trình duyệt tại **http://127.0.0.1:5000
-**
+Mở trình duyệt tại http://127.0.0.1:5000
+
